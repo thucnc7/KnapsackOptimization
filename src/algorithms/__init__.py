@@ -1,9 +1,8 @@
-from src.models import Item, Metadata, KnapsackInstance
 from src.algorithms.base import (
     BaseKnapsackSolver,
     ZeroOneKnapsackMixin,
     UnboundedKnapsackMixin,
-    FractionalKnapsackMixin
+    FractionalKnapsackMixin,
 )
 from src.algorithms.dp import DPKnapsackSolver
 from src.algorithms.greedy import GreedyKnapsackSolver
@@ -11,9 +10,6 @@ from src.algorithms.branch_and_bound import BranchAndBoundSolver
 from src.algorithms.backtracking import BacktrackingSolver
 
 __all__ = [
-    'Item',
-    'Metadata',
-    'KnapsackInstance',
     'BaseKnapsackSolver',
     'ZeroOneKnapsackMixin',
     'UnboundedKnapsackMixin',
