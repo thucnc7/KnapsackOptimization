@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Callable, Dict, List, Tuple, Union
+from typing import Callable, Dict, List, Tuple
 
 import numpy as np
 from tqdm import tqdm
@@ -48,66 +48,48 @@ def _generate_strongly_correlated(
     rng: np.random.Generator, n: int, max_weight: int
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Generate values as a deterministic offset of weights."""
-    delta = max_weight // 10
+    delta = max(1, max_weight // 10)
     weights = rng.integers(1, max_weight + 1, size=n, endpoint=False)
     values = weights + delta
     return weights, values
 
 
-def _compute_metadata(
-    weights: np.ndarray, values: np.ndarray, capacity_ratio: float
-) -> Dict[str, Union[int, float]]:
-    """Compute statistical metadata for the generated instance."""
-    total_weight = float(np.sum(weights))
-    capacity = int(total_weight * capacity_ratio)
-    ratio = float(capacity / total_weight) if total_weight > 0 else 0.0
-    weight_mean = float(np.mean(weights))
-    weight_std_dev = float(np.std(weights))
-    value_mean = float(np.mean(values))
-    value_std_dev = float(np.std(values))
-
-    if weight_std_dev == 0.0 or value_std_dev == 0.0:
-        pearson_corr = 0.0
-    else:
-        pearson_corr = float(np.corrcoef(weights, values)[0, 1])
-
-    density = values / weights
-    density_variance = float(np.var(density))
-
-    return {
-        "n": int(len(weights)),
-        "capacity": capacity,
-        "capacity_to_total_weight_ratio": ratio,
-        "weight_mean": weight_mean,
-        "weight_std_dev": weight_std_dev,
-        "value_mean": value_mean,
-        "value_std_dev": value_std_dev,
-        "pearson_correlation_coefficient": pearson_corr,
-        "density_variance": density_variance,
-    }
+def _build_items(weights: np.ndarray, values: np.ndarray) -> List[Item]:
+    """Convert numpy arrays into Item records (using new model fields)."""
+    return [
+        Item(id=int(idx), weight=float(w), value=float(v))
+        for idx, (w, v) in enumerate(zip(weights, values))
+    ]
 
 
-def _enrich_metadata(
-    metadata: Dict[str, Union[int, float]],
+def _instance_to_json_dict(
+    instance: KnapsackInstance,
+    test_id: str,
     strategy_name: str,
-    capacity_ratio: float,
+    capacity_ratio_input: float,
     max_weight: int,
     seed: int,
-) -> Dict[str, Union[int, float, str]]:
-    """Add generation parameters to metadata for traceability."""
-    metadata["strategy"] = strategy_name
-    metadata["capacity_ratio_input"] = capacity_ratio
-    metadata["max_weight"] = max_weight
-    metadata["seed"] = seed
-    return metadata
+) -> dict:
+    """Serialize a KnapsackInstance to a JSON-ready dictionary.
 
-
-def _build_items(weights: np.ndarray, values: np.ndarray) -> List[Item]:
-    """Convert numpy arrays into Item records."""
-    items: List[Item] = []
-    for idx, (w, v) in enumerate(zip(weights, values)):
-        items.append(Item(id=int(idx), w=int(w), v=int(v)))
-    return items
+    Includes traceability fields (strategy, seed, max_weight) alongside
+    the metadata auto-calculated by the model.
+    """
+    return {
+        "test_id": test_id,
+        "capacity": instance.capacity,
+        "metadata": {
+            **instance.metadata,
+            "strategy": strategy_name,
+            "capacity_ratio_input": capacity_ratio_input,
+            "max_weight": max_weight,
+            "seed": seed,
+        },
+        "items": [
+            {"id": item.id, "weight": item.weight, "value": item.value}
+            for item in instance.items
+        ],
+    }
 
 
 def generate_instance(
@@ -120,27 +102,40 @@ def generate_instance(
     strategy_name: str,
     max_weight: int = DEFAULT_MAX_WEIGHT,
     seed: int = 0,
-) -> KnapsackInstance:
-    """Generate a single knapsack instance with computed metadata."""
+) -> Tuple[KnapsackInstance, str]:
+    """Generate a single knapsack instance and return it with its test_id."""
     weights, values = strategy(rng, n, max_weight)
-    metadata = _compute_metadata(weights, values, ratio)
-    metadata = _enrich_metadata(metadata, strategy_name, ratio, max_weight, seed)
+    total_weight = float(np.sum(weights))
+    capacity = total_weight * ratio
+
+    items = _build_items(weights, values)
+    instance = KnapsackInstance(items=items, capacity=capacity)
+
     index_str = f"{instance_index:02d}"
     ratio_str = f"{ratio:g}"
     test_id = (
         f"{scenario_name}_n{n}_wmax{max_weight}_r{ratio_str}_{strategy_name}_{index_str}"
     )
-    items = _build_items(weights, values)
-    return KnapsackInstance(test_id=test_id, metadata=metadata, items=items)
+    return instance, test_id
 
 
-def save_instance(instance: KnapsackInstance, output_dir: Path) -> Path:
+def save_instance(
+    instance: KnapsackInstance,
+    test_id: str,
+    output_dir: Path,
+    strategy_name: str,
+    capacity_ratio_input: float,
+    max_weight: int,
+    seed: int,
+) -> Path:
     """Write the instance as JSON to the output directory."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{instance.test_id}.json"
-    path = output_dir / filename
+    path = output_dir / f"{test_id}.json"
+    data = _instance_to_json_dict(
+        instance, test_id, strategy_name, capacity_ratio_input, max_weight, seed
+    )
     with path.open("w", encoding="utf-8") as handle:
-        json.dump(instance.to_json_dict(), handle, indent=2)
+        json.dump(data, handle, indent=2)
     return path
 
 
@@ -196,7 +191,7 @@ def main() -> None:
             ratios = scenario["capacity_ratios"]
             strategy_names = scenario["strategies"]
             instances_per_config = scenario["instances_per_config"]
-            scenario_max_weight = scenario.get("max_weight", DEFAULT_MAX_WEIGHT)
+            scenario_max_weight = int(scenario.get("max_weight", DEFAULT_MAX_WEIGHT))
 
             for n in n_values:
                 for ratio in ratios:
@@ -207,7 +202,7 @@ def main() -> None:
                                 f"Unknown strategy '{strategy_name}' in {scenario_name}"
                             )
                         for index in range(1, instances_per_config + 1):
-                            instance = generate_instance(
+                            instance, test_id = generate_instance(
                                 strategy=strategy,
                                 n=n,
                                 ratio=ratio,
@@ -215,10 +210,18 @@ def main() -> None:
                                 rng=rng,
                                 scenario_name=scenario_name,
                                 strategy_name=strategy_name,
-                                max_weight=int(scenario_max_weight),
+                                max_weight=scenario_max_weight,
                                 seed=seed,
                             )
-                            save_instance(instance, output_dir)
+                            save_instance(
+                                instance=instance,
+                                test_id=test_id,
+                                output_dir=output_dir,
+                                strategy_name=strategy_name,
+                                capacity_ratio_input=ratio,
+                                max_weight=scenario_max_weight,
+                                seed=seed,
+                            )
                             progress.update(1)
 
 
