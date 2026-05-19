@@ -1,0 +1,20 @@
+[
+  {
+    "name": "algorithmic_scaling_test",
+    "description": "Danh gia su thay doi thoi gian chay khi tang so luong phan tu N, voi cac muc tuong quan khac nhau",
+    "n_values": [10, 50, 100, 500],
+    "max_weight": 1000,
+    "capacity_ratios": [0.1, 0.5, 0.9],
+    "pearson_r_targets": [0.0, 0.5, 0.95],
+    "instances_per_config": 5
+  },
+  {
+    "name": "memory_stress_test",
+    "description": "Danh gia muc do tieu thu bo nho RAM (Peak Memory) voi khoi luong vat pham cuc dai",
+    "n_values": [50],
+    "max_weight": 100000,
+    "capacity_ratios": [0.5],
+    "pearson_r_targets": [0.0, 0.95],
+    "instances_per_config": 3
+  }
+]
