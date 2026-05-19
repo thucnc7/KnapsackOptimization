@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Callable, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 from tqdm import tqdm
@@ -20,42 +20,39 @@ from src.models import Item, KnapsackInstance
 DEFAULT_MAX_WEIGHT = 1000
 DEFAULT_CAPACITY_RATIO = 0.5
 
-StrategyFn = Callable[[np.random.Generator, int, int], Tuple[np.ndarray, np.ndarray]]
 
-
-def _generate_uncorrelated(
-    rng: np.random.Generator, n: int, max_weight: int
+def _generate_with_target_correlation(
+    rng: np.random.Generator,
+    n: int,
+    max_weight: int,
+    target_pearson_r: float,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Generate weights and values independently from uniform distributions."""
-    weights = rng.integers(1, max_weight + 1, size=n, endpoint=False)
-    values = rng.integers(1, max_weight + 1, size=n, endpoint=False)
-    return weights, values
+    """Generate (weights, values) arrays targeting a specific Pearson correlation.
 
+    Uses the Cholesky / linear-combination method:
+      - x ~ N(0,1) for weights
+      - y = r*x + sqrt(1-r²)*z  where z ~ N(0,1) independent
+    Both arrays are then scaled to integer values in [1, max_weight].
+    The realised correlation converges to target_pearson_r as n grows.
+    """
+    r = float(np.clip(target_pearson_r, -1.0, 1.0))
 
-def _generate_weakly_correlated(
-    rng: np.random.Generator, n: int, max_weight: int
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Generate values in a band around the weights."""
-    delta = max(1, max_weight // 10)
-    weights = rng.integers(1, max_weight + 1, size=n, endpoint=False)
-    low = np.maximum(1, weights - delta)
-    high = weights + delta
-    values = rng.integers(low, high + 1, endpoint=False)
-    return weights, values
+    x = rng.standard_normal(n)
+    z = rng.standard_normal(n)
+    y = r * x + np.sqrt(max(0.0, 1.0 - r ** 2)) * z
 
+    def _scale(arr: np.ndarray) -> np.ndarray:
+        lo, hi = arr.min(), arr.max()
+        if hi == lo:
+            return np.full(n, (max_weight + 1) // 2, dtype=int)
+        normalised = (arr - lo) / (hi - lo)
+        return np.round(normalised * (max_weight - 1) + 1).astype(int)
 
-def _generate_strongly_correlated(
-    rng: np.random.Generator, n: int, max_weight: int
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Generate values as a deterministic offset of weights."""
-    delta = max(1, max_weight // 10)
-    weights = rng.integers(1, max_weight + 1, size=n, endpoint=False)
-    values = weights + delta
-    return weights, values
+    return _scale(x), _scale(y)
 
 
 def _build_items(weights: np.ndarray, values: np.ndarray) -> List[Item]:
-    """Convert numpy arrays into Item records (using new model fields)."""
+    """Convert numpy arrays into Item records."""
     return [
         Item(id=int(idx), weight=float(w), value=float(v))
         for idx, (w, v) in enumerate(zip(weights, values))
@@ -65,22 +62,18 @@ def _build_items(weights: np.ndarray, values: np.ndarray) -> List[Item]:
 def _instance_to_json_dict(
     instance: KnapsackInstance,
     test_id: str,
-    strategy_name: str,
+    target_pearson_r: float,
     capacity_ratio_input: float,
     max_weight: int,
     seed: int,
 ) -> dict:
-    """Serialize a KnapsackInstance to a JSON-ready dictionary.
-
-    Includes traceability fields (strategy, seed, max_weight) alongside
-    the metadata auto-calculated by the model.
-    """
+    """Serialize a KnapsackInstance to a JSON-ready dictionary."""
     return {
         "test_id": test_id,
         "capacity": instance.capacity,
         "metadata": {
             **instance.metadata,
-            "strategy": strategy_name,
+            "target_pearson_r": target_pearson_r,
             "capacity_ratio_input": capacity_ratio_input,
             "max_weight": max_weight,
             "seed": seed,
@@ -93,18 +86,17 @@ def _instance_to_json_dict(
 
 
 def generate_instance(
-    strategy: StrategyFn,
     n: int,
     ratio: float,
+    target_pearson_r: float,
     instance_index: int,
     rng: np.random.Generator,
     scenario_name: str,
-    strategy_name: str,
     max_weight: int = DEFAULT_MAX_WEIGHT,
     seed: int = 0,
 ) -> Tuple[KnapsackInstance, str]:
     """Generate a single knapsack instance and return it with its test_id."""
-    weights, values = strategy(rng, n, max_weight)
+    weights, values = _generate_with_target_correlation(rng, n, max_weight, target_pearson_r)
     total_weight = float(np.sum(weights))
     capacity = total_weight * ratio
 
@@ -113,8 +105,9 @@ def generate_instance(
 
     index_str = f"{instance_index:02d}"
     ratio_str = f"{ratio:g}"
+    r_str = f"{target_pearson_r:g}"
     test_id = (
-        f"{scenario_name}_n{n}_wmax{max_weight}_r{ratio_str}_{strategy_name}_{index_str}"
+        f"{scenario_name}_n{n}_wmax{max_weight}_cr{ratio_str}_pr{r_str}_{index_str}"
     )
     return instance, test_id
 
@@ -123,7 +116,7 @@ def save_instance(
     instance: KnapsackInstance,
     test_id: str,
     output_dir: Path,
-    strategy_name: str,
+    target_pearson_r: float,
     capacity_ratio_input: float,
     max_weight: int,
     seed: int,
@@ -132,7 +125,7 @@ def save_instance(
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"{test_id}.json"
     data = _instance_to_json_dict(
-        instance, test_id, strategy_name, capacity_ratio_input, max_weight, seed
+        instance, test_id, target_pearson_r, capacity_ratio_input, max_weight, seed
     )
     with path.open("w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=2)
@@ -169,18 +162,12 @@ def main() -> None:
     with args.config.open("r", encoding="utf-8") as handle:
         scenarios = json.load(handle)
 
-    strategy_map: Dict[str, StrategyFn] = {
-        "uncorrelated": _generate_uncorrelated,
-        "weakly_correlated": _generate_weakly_correlated,
-        "strongly_correlated": _generate_strongly_correlated,
-    }
-
     total_tasks = 0
     for scenario in scenarios:
         total_tasks += (
             len(scenario["n_values"])
             * len(scenario["capacity_ratios"])
-            * len(scenario["strategies"])
+            * len(scenario["pearson_r_targets"])
             * scenario["instances_per_config"]
         )
 
@@ -189,27 +176,21 @@ def main() -> None:
             scenario_name = scenario["name"]
             n_values = scenario["n_values"]
             ratios = scenario["capacity_ratios"]
-            strategy_names = scenario["strategies"]
+            pearson_r_targets = scenario["pearson_r_targets"]
             instances_per_config = scenario["instances_per_config"]
             scenario_max_weight = int(scenario.get("max_weight", DEFAULT_MAX_WEIGHT))
 
             for n in n_values:
                 for ratio in ratios:
-                    for strategy_name in strategy_names:
-                        strategy = strategy_map.get(strategy_name)
-                        if strategy is None:
-                            raise ValueError(
-                                f"Unknown strategy '{strategy_name}' in {scenario_name}"
-                            )
+                    for target_r in pearson_r_targets:
                         for index in range(1, instances_per_config + 1):
                             instance, test_id = generate_instance(
-                                strategy=strategy,
                                 n=n,
                                 ratio=ratio,
+                                target_pearson_r=target_r,
                                 instance_index=index,
                                 rng=rng,
                                 scenario_name=scenario_name,
-                                strategy_name=strategy_name,
                                 max_weight=scenario_max_weight,
                                 seed=seed,
                             )
@@ -217,7 +198,7 @@ def main() -> None:
                                 instance=instance,
                                 test_id=test_id,
                                 output_dir=output_dir,
-                                strategy_name=strategy_name,
+                                target_pearson_r=target_r,
                                 capacity_ratio_input=ratio,
                                 max_weight=scenario_max_weight,
                                 seed=seed,
