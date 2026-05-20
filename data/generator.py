@@ -66,6 +66,7 @@ def _instance_to_json_dict(
     capacity_ratio_input: float,
     max_weight: int,
     seed: int,
+    instance_seed: int,
 ) -> dict:
     """Serialize a KnapsackInstance to a JSON-ready dictionary."""
     return {
@@ -77,6 +78,7 @@ def _instance_to_json_dict(
             "capacity_ratio_input": capacity_ratio_input,
             "max_weight": max_weight,
             "seed": seed,
+            "instance_seed": instance_seed,
         },
         "items": [
             {"id": item.id, "weight": item.weight, "value": item.value}
@@ -93,7 +95,6 @@ def generate_instance(
     rng: np.random.Generator,
     scenario_name: str,
     max_weight: int = DEFAULT_MAX_WEIGHT,
-    seed: int = 0,
 ) -> Tuple[KnapsackInstance, str]:
     """Generate a single knapsack instance and return it with its test_id."""
     weights, values = _generate_with_target_correlation(rng, n, max_weight, target_pearson_r)
@@ -120,12 +121,19 @@ def save_instance(
     capacity_ratio_input: float,
     max_weight: int,
     seed: int,
+    instance_seed: int,
 ) -> Path:
     """Write the instance as JSON to the output directory."""
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"{test_id}.json"
     data = _instance_to_json_dict(
-        instance, test_id, target_pearson_r, capacity_ratio_input, max_weight, seed
+        instance,
+        test_id,
+        target_pearson_r,
+        capacity_ratio_input,
+        max_weight,
+        seed,
+        instance_seed,
     )
     with path.open("w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=2)
@@ -157,7 +165,6 @@ def main() -> None:
     args = parse_args()
     output_dir = Path(__file__).resolve().parent / "raw"
     seed = args.seed
-    rng = np.random.default_rng(seed)
 
     with args.config.open("r", encoding="utf-8") as handle:
         scenarios = json.load(handle)
@@ -182,8 +189,18 @@ def main() -> None:
 
             for n in n_values:
                 for ratio in ratios:
+                    ratio_scaled = int(round(ratio * 1000))
                     for target_r in pearson_r_targets:
+                        r_scaled = int(round(target_r * 1000))
                         for index in range(1, instances_per_config + 1):
+                            instance_seed = (
+                                seed * 1_000_003
+                                + n * 101
+                                + ratio_scaled * 1009
+                                + r_scaled * 9176
+                                + index
+                            ) % (2**32)
+                            rng = np.random.default_rng(instance_seed)
                             instance, test_id = generate_instance(
                                 n=n,
                                 ratio=ratio,
@@ -192,7 +209,6 @@ def main() -> None:
                                 rng=rng,
                                 scenario_name=scenario_name,
                                 max_weight=scenario_max_weight,
-                                seed=seed,
                             )
                             save_instance(
                                 instance=instance,
@@ -202,6 +218,7 @@ def main() -> None:
                                 capacity_ratio_input=ratio,
                                 max_weight=scenario_max_weight,
                                 seed=seed,
+                                instance_seed=instance_seed,
                             )
                             progress.update(1)
 
