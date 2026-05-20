@@ -64,6 +64,7 @@ class TestcaseQualityAnalyzer:
                 "capacity_ratio_input": float(meta.get("capacity_ratio_input", float("nan"))),
                 "max_weight":       int(meta.get("max_weight", 0)),
                 "seed":             int(meta.get("seed", 0)),
+                "instance_seed":    int(meta.get("instance_seed", meta.get("seed", 0))),
             }
             # Derive per-item arrays for distribution plots
             items = raw.get("items", [])
@@ -155,6 +156,63 @@ class TestcaseQualityAnalyzer:
             save_path = out / "quality_dashboard.png"
             fig.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
             print(f"Dashboard saved -> {save_path}")
+
+        plt.show()
+
+    def plot_metadata_checks(self, output_dir: str | Path | None = None) -> None:
+        """Plot uniformity and independence checks for metadata attributes."""
+        plt.style.use(STYLE)
+        fig = plt.figure(figsize=(18, 10), facecolor=FIG_BG)
+        fig.suptitle(
+            "Metadata Uniformity Check",
+            fontsize=16, color=TEXT_COLOR, fontweight="bold", y=0.98,
+        )
+        gs = gridspec.GridSpec(
+            2, 2, figure=fig,
+            hspace=0.35, wspace=0.25,
+            left=0.06, right=0.97, top=0.92, bottom=0.08,
+        )
+        ax1 = fig.add_subplot(gs[0, 0])
+        ax2 = fig.add_subplot(gs[0, 1])
+        ax3 = fig.add_subplot(gs[1, 0])
+        ax4 = fig.add_subplot(gs[1, 1])
+
+        self._plot_metadata_count(ax1, "n", "N distribution")
+        self._plot_metadata_count(ax2, "capacity_ratio_input", "Capacity ratio (input) distribution")
+        self._plot_metadata_count(ax3, "target_pearson_r", "Target Pearson r distribution")
+        self._plot_metadata_count(ax4, "max_weight", "Max weight distribution")
+
+        if output_dir:
+            out = Path(output_dir)
+            out.mkdir(parents=True, exist_ok=True)
+            save_path = out / "metadata_uniformity.png"
+            fig.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
+            print(f"Metadata uniformity saved -> {save_path}")
+
+        plt.show()
+
+        fig2 = plt.figure(figsize=(10, 8), facecolor=FIG_BG)
+        ax = fig2.add_subplot(1, 1, 1)
+        self._plot_metadata_heatmap(
+            ax,
+            cols=[
+                "n",
+                "capacity_ratio_input",
+                "target_pearson_r",
+                "max_weight",
+                "seed",
+                "instance_seed",
+            ],
+            method="spearman",
+            title="Metadata Independence (Spearman ρ)",
+        )
+
+        if output_dir:
+            out = Path(output_dir)
+            out.mkdir(parents=True, exist_ok=True)
+            save_path = out / "metadata_independence.png"
+            fig2.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
+            print(f"Metadata independence saved -> {save_path}")
 
         plt.show()
 
@@ -306,12 +364,46 @@ class TestcaseQualityAnalyzer:
             legend.get_frame().set_edgecolor("#444466")
         self._style_ax(ax, "Realised Pearson r Distribution by N")
 
-    def _plot_metadata_heatmap(self, ax: plt.Axes) -> None:
-        """Correlation heatmap of the numeric metadata columns."""
-        cols = ["n", "capacity_ratio", "pearson_r", "density_cv",
-                "target_pearson_r", "capacity_ratio_input"]
+    def _plot_metadata_count(self, ax: plt.Axes, column: str, title: str) -> None:
+        """Bar chart to check if metadata values are uniformly distributed."""
+        series = self.df[column].dropna()
+        if series.empty:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
+            self._style_ax(ax, title)
+            return
+
+        counts = series.value_counts().sort_index()
+        ax.bar(counts.index.astype(str), counts.values, color=ACCENT, alpha=0.85)
+        ax.axhline(counts.mean(), color="#888888", lw=1, linestyle="--", label="Uniform mean")
+        ax.set_xlabel(column)
+        ax.set_ylabel("Count")
+        ax.tick_params(axis="x", labelrotation=30)
+        ax.legend(fontsize=7, facecolor=AX_BG, edgecolor="#444466", labelcolor=TEXT_COLOR)
+        self._style_ax(ax, title)
+
+    def _plot_metadata_heatmap(
+        self,
+        ax: plt.Axes,
+        cols: List[str] | None = None,
+        method: str = "spearman",
+        title: str = "Metadata Correlation Heatmap",
+    ) -> None:
+        """Correlation heatmap of numeric metadata columns."""
+        if cols is None:
+            cols = [
+                "n",
+                "capacity_ratio",
+                "pearson_r",
+                "density_cv",
+                "target_pearson_r",
+                "capacity_ratio_input",
+            ]
         sub = self.df[cols].dropna()
-        corr = sub.corr()
+        if sub.empty:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
+            self._style_ax(ax, title)
+            return
+        corr = sub.corr(method=method)
 
         mask = np.triu(np.ones_like(corr, dtype=bool))
         sns.heatmap(
@@ -323,7 +415,7 @@ class TestcaseQualityAnalyzer:
         )
         ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha="right", fontsize=8)
         ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=8)
-        self._style_ax(ax, "Metadata Correlation Heatmap")
+        self._style_ax(ax, title)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -348,6 +440,7 @@ def main() -> None:
     analyzer = TestcaseQualityAnalyzer(args.raw)
     analyzer.print_summary()
     analyzer.plot_all(output_dir=args.output)
+    analyzer.plot_metadata_checks(output_dir=args.output)
 
 
 if __name__ == "__main__":

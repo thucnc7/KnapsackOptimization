@@ -16,8 +16,8 @@ Ví dụ cấu hình:
 ```json
 [
   {
-    "name": "algorithmic_scaling_test",
-    "description": "Mo ta kich ban",
+    "name": "benchmark_core",
+    "description": "Bo testcase chuan de so sanh cong bang giua fractional va 0/1 (n, capacity_ratio, pearson_r).",
     "n_values": [10, 50, 100, 500],
     "max_weight": 1000,
     "capacity_ratios": [0.1, 0.5, 0.9],
@@ -69,6 +69,7 @@ Tham số CLI:
 | `--seed` | `42` | Seed ngẫu nhiên, đảm bảo kết quả tái tạo được (reproducible). |
 
 > **Lưu ý:** Cùng `--seed` sẽ luôn sinh ra **đúng bộ dữ liệu giống nhau**.
+> Mỗi testcase còn lưu `instance_seed` để tái tạo từng file riêng lẻ.
 
 **Thuật toán sinh dữ liệu:**  
 Generator dùng phương pháp **Cholesky / linear combination** để kiểm soát Pearson r:
@@ -92,7 +93,7 @@ Ví dụ nội dung JSON:
 
 ```json
 {
-  "test_id": "algorithmic_scaling_test_n10_wmax1000_cr0.5_pr0_01",
+  "test_id": "benchmark_core_n10_wmax1000_cr0.5_pr0_01",
   "capacity": 1772.5,
   "metadata": {
     "n": 10,
@@ -102,7 +103,8 @@ Ví dụ nội dung JSON:
     "target_pearson_r": 0.0,
     "capacity_ratio_input": 0.5,
     "max_weight": 1000,
-    "seed": 42
+    "seed": 42,
+    "instance_seed": 4201
   },
   "items": [
     {"id": 0, "weight": 180.0, "value": 794.0},
@@ -122,6 +124,9 @@ python data/quality.py
 ```
 
 Script sẽ in bảng thống kê tóm tắt ra terminal và lưu một **dashboard 9 biểu đồ** vào `results/quality/quality_dashboard.png`.
+Ngoài ra, module còn lưu:
+- `results/quality/metadata_uniformity.png`
+- `results/quality/metadata_independence.png`
 
 Tham số CLI:
 
@@ -165,3 +170,4 @@ Tham số CLI:
 | `capacity_ratio_input` | Tỷ lệ capacity đầu vào từ config. |
 | `max_weight` | Giá trị khối lượng tối đa đầu vào. |
 | `seed` | Seed ngẫu nhiên đã dùng để sinh dữ liệu. |
+| `instance_seed` | Seed riêng cho từng testcase để tái tạo độc lập. |
