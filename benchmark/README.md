@@ -1,31 +1,31 @@
 # Benchmark Runner
 
-This folder contains the process-isolated benchmarking engine. Each algorithm is executed in its own process so that timeouts or OOM events do not crash the suite.
+Thư mục này chứa bộ máy benchmark chạy cách ly theo tiến trình. Mỗi thuật toán được chạy trong một process riêng để khi **timeout** hoặc **OOM** xảy ra, toàn bộ suite vẫn an toàn.
 
-## Quick Start
+## Chạy nhanh
 
-From the project root:
+Từ thư mục gốc của dự án:
 
 ```cmd
 python -u "E:\Antigravity Workspace\Knapsack\KnapsackOptimization\benchmark\runner.py" --limit 1 --timeout 5
 ```
 
-## Command Options
+## Tùy chọn lệnh
 
-- `--raw`: directory containing JSON instances (default: `data/raw`)
-- `--output`: CSV output file (default: `results/csv/benchmark_results.csv`)
-- `--timeout`: per-run timeout in seconds (default: 60)
-- `--limit`: limit number of instances (0 = all)
+- `--raw`: thư mục chứa các instance JSON (mặc định `data/raw`)
+- `--output`: file CSV đầu ra (mặc định `results/csv/benchmark_results.csv`)
+- `--timeout`: thời gian tối đa cho mỗi lần chạy (giây, mặc định 60)
+- `--limit`: giới hạn số instance (0 = chạy hết)
 
-## Output Columns
+## Cột trong CSV
 
-The CSV file includes the following columns:
+CSV xuất ra gồm các cột:
 
 - `test_id`, `algorithm`, `knapsack_type`, `status`
 - `time_sec`, `peak_memory_mb`, `optimal_value`
 - `n`, `capacity`, `capacity_to_weight_ratio`, `pearson_corr`, `density_variance`
 
-## Notes
+## Ghi chú
 
-- The algorithm registry is defined in `benchmark/runner.py` using placeholder classes.
-- `tqdm` is required for the progress bar and is already listed in `requirements.txt`.
+- Danh sách thuật toán được khai báo trong `benchmark/runner.py`.
+- `tqdm` dùng để hiển thị progress bar và đã nằm trong `requirements.txt`.

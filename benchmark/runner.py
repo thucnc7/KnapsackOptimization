@@ -22,6 +22,12 @@ from src.algorithms.backtracking import BacktrackingSolver
 from src.algorithms.branch_and_bound import BranchAndBoundSolver
 from src.algorithms.dp import DPKnapsackSolver
 from src.algorithms.greedy import GreedyKnapsackSolver
+from src.algorithms.simplex import (
+    PrimalSimplexSolver,
+    DualSimplexSolver,
+    BranchAndBoundSimplexSolver,
+    GomoryCutSolver,
+)
 from benchmark.metrics import (
     STATUS_SUCCESS,
     run_with_profiler,
@@ -50,8 +56,28 @@ def get_algorithm_registry() -> Sequence[AlgorithmSpec]:
             target_knapsack_type="01",
         ),
         AlgorithmSpec(
+            name="GomoryCut",
+            factory=GomoryCutSolver,
+            target_knapsack_type="01",
+        ),
+        AlgorithmSpec(
+            name="SimplexBnB",
+            factory=BranchAndBoundSimplexSolver,
+            target_knapsack_type="01",
+        ),
+        AlgorithmSpec(
             name="GreedyFractional",
             factory=GreedyKnapsackSolver,
+            target_knapsack_type="fractional",
+        ),
+        AlgorithmSpec(
+            name="PrimalSimplex",
+            factory=PrimalSimplexSolver,
+            target_knapsack_type="fractional",
+        ),
+        AlgorithmSpec(
+            name="DualSimplex",
+            factory=DualSimplexSolver,
             target_knapsack_type="fractional",
         ),
         AlgorithmSpec(
@@ -185,8 +211,10 @@ def _build_row(
     peak_memory_mb: float,
     optimal_value: int,
     instance: KnapsackInstance,
+    payload_metadata: Dict[str, Any],
 ) -> Dict[str, Any]:
-    metadata = instance.metadata
+    # Prefer JSON payload metadata (capacity_ratio_input, target_pearson_r) with fallback to computed metadata.
+    metadata = payload_metadata or instance.metadata
     return {
         "test_id": test_id,
         "algorithm": algorithm.name,
@@ -197,8 +225,14 @@ def _build_row(
         "optimal_value": optimal_value,
         "n": int(metadata.get("n", len(instance.items))),
         "capacity": int(round(instance.capacity)),
-        "capacity_to_weight_ratio": metadata.get("capacity_ratio", 0.0),
-        "pearson_corr": metadata.get("pearson_r", 0.0),
+        "capacity_to_weight_ratio": metadata.get(
+            "capacity_ratio_input",
+            metadata.get("capacity_ratio", 0.0),
+        ),
+        "pearson_corr": metadata.get(
+            "target_pearson_r",
+            metadata.get("pearson_r", 0.0),
+        ),
         "density_variance": _density_variance(instance.items),
     }
 
@@ -218,7 +252,7 @@ def run_benchmark(
     total_tasks = len(instances) * len(algorithms)
 
     with tqdm(total=total_tasks, desc="Benchmarking", unit="run") as progress:
-        for test_id, instance, _ in instances:
+        for test_id, instance, payload_metadata in instances:
             for algo in algorithms:
                 status, result, exec_time, peak_mb = run_with_profiler(
                     _execute_algorithm,
@@ -243,6 +277,7 @@ def run_benchmark(
                         peak_memory_mb=peak_mb,
                         optimal_value=optimal_value,
                         instance=instance,
+                        payload_metadata=payload_metadata,
                     )
                 )
                 progress.update(1)

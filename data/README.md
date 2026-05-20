@@ -46,6 +46,16 @@ Ví dụ cấu hình:
 
 ---
 
+## 1.1. Các kịch bản hiện có
+
+Các kịch bản mặc định trong `data/test_scenarios.json`:
+
+- `benchmark_core`: bộ chuẩn để so sánh công bằng giữa fractional và 0/1.
+- `benchmark_stress`: bộ stress để kiểm tra mở rộng (capacity lớn).
+- `extreme_n_test`: bộ cực đại về n để thử giới hạn Greedy/DP.
+
+---
+
 ## 2. Thực thi sinh dữ liệu (`generator.py`)
 
 Sau khi cấu hình kịch bản, chạy lệnh từ thư mục gốc của dự án:

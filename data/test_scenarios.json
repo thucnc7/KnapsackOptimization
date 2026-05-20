@@ -16,5 +16,14 @@
     "capacity_ratios": [0.5],
     "pearson_r_targets": [0.0, 0.95],
     "instances_per_config": 3
+  },
+  {
+    "name": "extreme_n_test",
+    "description": "Ep thuat toan Tham Lam va Quy Hoach Dong chay het cong suat voi N khong lo",
+    "n_values": [1000, 5000, 10000],
+    "max_weight": 100,
+    "capacity_ratios": [0.5],
+    "pearson_r_targets": [0.0],
+    "instances_per_config": 2
   }
 ]
