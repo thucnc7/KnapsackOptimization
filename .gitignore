@@ -1,7 +1,16 @@
+# Byte-compiled / optimized / DLL support
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+
+# Environment files
 .env
+
+# Virtual environments
 .venv/
+venv/
+env/
+
+# Generated data/results
 data/raw/
 results/
