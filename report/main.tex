@@ -1,0 +1,502 @@
+%\documentclass[fontsize=13pt,a4paper,oneside, DIV=calc, chapterprefix=true]{scrbook}
+\documentclass[fontsize=13pt,a4paper]{report}
+
+\usepackage[utf8,nocaptions]{vietnam}
+\usepackage[vietnamese]{babel}
+
+\usepackage{husthesis-en}
+\usepackage{enumitem}
+
+\usepackage{tipa}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{mathptmx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+
+\usepackage{array}
+\newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{M}[1]{>{\centering\arraybackslash}m{#1}}
+\usepackage{fancyhdr}
+\usepackage{multirow}
+\usepackage{algorithm2e}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+}
+
+
+\ctname{ỨNG DỤNG \\ CÁC MÔ HÌNH QUY HOẠCH TUYẾN TÍNH \\ CHO CÁC LOẠI BÀI TOÁN KNAPSACK}
+\cstuname{
+Nguyễn Hoàng Đạt - 24001989 \\
+Nguyễn Hải Anh - <Mã SV> \\
+Lê Sỹ Thức - <Mã SV> \\
+}
+
+\csMajor{Khoa học máy tính và thông tin}
+\cttime{2026}
+
+\thesislayout
+
+\counterwithout{section}{chapter}
+
+\begin{document}
+
+\coverpage
+\secondcoverpage
+
+\begin{abstract}
+Bài toán cái túi (Knapsack) là một trong những bài toán tối ưu tổ hợp kinh điển trong khoa học máy tính, với nhiều ứng dụng thực tiễn trong phân bổ tài nguyên, quản lý danh mục đầu tư và lập lịch sản xuất. Trong báo cáo này, chúng tôi trình bày ba biến thể chính của bài toán Knapsack: 0/1 Knapsack, Unbounded Knapsack và Fractional Knapsack. Với mỗi biến thể, chúng tôi phân tích các chiến lược giải cơ bản bao gồm vét cạn, quay lui, nhánh cận, tham lam và quy hoạch động. Trọng tâm của báo cáo là việc xây dựng các mô hình quy hoạch tuyến tính (LP) và quy hoạch nguyên (IP), áp dụng các thuật toán Simplex đơn hình, lời giải đối ngẫu và phương pháp lát cắt Gomory để giải các bài toán này. Kết quả thực nghiệm trên bộ dữ liệu benchmark cho phép so sánh hiệu năng và chất lượng nghiệm giữa các phương pháp.
+\end{abstract}
+
+\nomenclature{LP}{Linear Programming -- Quy hoạch tuyến tính}
+\nomenclature{IP}{Integer Programming -- Quy hoạch nguyên}
+\nomenclature{ILP}{Integer Linear Programming -- Quy hoạch nguyên tuyến tính}
+\nomenclature{DP}{Dynamic Programming -- Quy hoạch động}
+\nomenclature{B\&B}{Branch and Bound -- Nhánh cận}
+\nomenclature{NP}{Non-deterministic Polynomial time}
+\printnomenclature
+
+\tableofcontents
+\vfil\null\endtitlepage
+
+\fancyhead{}
+\renewcommand{\footrulewidth}{0.4pt}
+\pagestyle{fancy}
+
+
+% ============================================================================
+% SECTION 1: GIỚI THIỆU
+% ============================================================================
+\section{Giới thiệu}
+\label{sec:intro}
+
+Bài toán cái túi (Knapsack Problem) là một trong những bài toán tối ưu tổ hợp nền tảng trong khoa học máy tính và vận trù học. Bài toán được phát biểu đơn giản: cho một tập các vật phẩm, mỗi vật phẩm có trọng lượng và giá trị riêng, hãy chọn một tập con các vật phẩm sao cho tổng giá trị là lớn nhất mà tổng trọng lượng không vượt quá sức chứa của cái túi.
+
+Mặc dù phát biểu đơn giản, bài toán Knapsack thuộc lớp NP-hard~\cite{karp1972reducibility}, nghĩa là chưa tồn tại thuật toán nào giải được mọi trường hợp trong thời gian đa thức (trừ khi P = NP). Điều này khiến bài toán trở thành đối tượng nghiên cứu quan trọng về mặt lý thuyết lẫn thực tiễn.
+
+\textbf{Ứng dụng thực tiễn.} Bài toán Knapsack xuất hiện trong nhiều lĩnh vực:
+\begin{itemize}[noitemsep]
+    \item \textit{Phân bổ tài nguyên}: phân bổ ngân sách, lập lịch dự án với tài nguyên giới hạn.
+    \item \textit{Quản lý danh mục đầu tư}: chọn tổ hợp tài sản tối ưu với vốn giới hạn.
+    \item \textit{Logistics}: xếp hàng vào container, xe tải với trọng tải giới hạn.
+    \item \textit{Mật mã học}: hệ mã Merkle--Hellman dựa trên bài toán Knapsack.
+\end{itemize}
+
+\textbf{Mục tiêu đề tài.} Báo cáo này tiếp cận bài toán Knapsack từ góc độ \textit{quy hoạch tuyến tính} (LP) và \textit{quy hoạch nguyên} (IP). Cụ thể, chúng tôi:
+\begin{enumerate}[noitemsep]
+    \item Trình bày ba biến thể chính: 0/1, Unbounded và Fractional Knapsack.
+    \item Phân tích các chiến lược giải cơ bản: vét cạn, quay lui, nhánh cận, tham lam, quy hoạch động.
+    \item Xây dựng mô hình LP/IP và áp dụng các thuật toán Simplex, lời giải đối ngẫu, lát cắt Gomory.
+    \item Thực nghiệm so sánh hiệu năng trên bộ dữ liệu benchmark với các mức độ phức tạp khác nhau.
+\end{enumerate}
+
+
+% ============================================================================
+% SECTION 2: CÁC LOẠI BÀI TOÁN KNAPSACK
+% ============================================================================
+\section{Một số loại bài toán Knapsack}
+\label{sec:knapsack_intro}
+
+Trong phần này, chúng tôi trình bày ba biến thể phổ biến nhất của bài toán Knapsack~\cite{kellerer2004knapsack}. Sự khác biệt cốt lõi giữa chúng nằm ở \textbf{miền giá trị của biến quyết định} $x_i$: nhị phân (0/1), nguyên không âm (Unbounded), hoặc liên tục trên $[0,1]$ (Fractional).
+
+Xét bài toán tổng quát với $n$ vật phẩm, vật phẩm thứ $i$ có trọng lượng $w_i > 0$, giá trị $v_i > 0$, và cái túi có sức chứa $W > 0$.
+
+
+% --- 2.1: 0/1 KNAPSACK ---
+\subsection{0/1 Knapsack}
+
+Trong bài toán 0/1 Knapsack, mỗi vật phẩm chỉ có thể được \textbf{chọn hoặc không chọn} (không chia nhỏ, không lặp lại). Biến quyết định $x_i \in \{0, 1\}$.
+
+\textbf{Mô hình toán học:}
+\begin{align}
+    \text{Maximize} \quad & \sum_{i=1}^{n} v_i \cdot x_i \label{eq:01obj} \\
+    \text{subject to} \quad & \sum_{i=1}^{n} w_i \cdot x_i \leq W \label{eq:01cap} \\
+    & x_i \in \{0, 1\}, \quad \forall i = 1, \ldots, n \label{eq:01bin}
+\end{align}
+
+Đây là một bài toán \textbf{quy hoạch nguyên nhị phân} (Binary Integer Programming). Ràng buộc~(\ref{eq:01bin}) khiến bài toán thuộc lớp NP-hard~\cite{karp1972reducibility}, do không gian tìm kiếm có kích thước $2^n$.
+
+\textbf{Ví dụ.} Cho 4 vật phẩm và sức chứa $W = 5$:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c|cccc}
+\toprule
+Vật phẩm $i$ & A & B & C & D \\
+\midrule
+Trọng lượng $w_i$ & 2 & 1 & 3 & 2 \\
+Giá trị $v_i$ & 12 & 10 & 20 & 15 \\
+Mật độ $v_i/w_i$ & 6.0 & 10.0 & 6.67 & 7.5 \\
+\bottomrule
+\end{tabular}
+\caption{Dữ liệu ví dụ cho bài toán Knapsack}
+\label{tab:example_items}
+\end{table}
+
+Nghiệm tối ưu: chọn $\{A, B, D\}$ với tổng trọng lượng $2+1+2=5 = W$, tổng giá trị $12+10+15 = 37$.
+
+
+% --- 2.2: UNBOUNDED KNAPSACK ---
+\subsection{Unbounded Knapsack}
+
+Trong bài toán Unbounded Knapsack, mỗi vật phẩm có thể được chọn \textbf{không giới hạn số lần}. Biến quyết định $x_i \in \mathbb{Z}_{\geq 0}$ (số nguyên không âm).
+
+\textbf{Mô hình toán học:}
+\begin{align}
+    \text{Maximize} \quad & \sum_{i=1}^{n} v_i \cdot x_i \label{eq:ubobj} \\
+    \text{subject to} \quad & \sum_{i=1}^{n} w_i \cdot x_i \leq W \label{eq:ubcap} \\
+    & x_i \in \mathbb{Z}_{\geq 0}, \quad \forall i = 1, \ldots, n \label{eq:ubint}
+\end{align}
+
+So với 0/1 Knapsack, miền biến mở rộng từ $\{0,1\}$ sang $\mathbb{Z}_{\geq 0}$, cho phép khai thác triệt để các vật phẩm có mật độ giá trị cao. Bài toán vẫn thuộc lớp NP-hard, tuy nhiên có thể giải bằng quy hoạch động với độ phức tạp giả đa thức $O(nW)$.
+
+\textbf{Ví dụ.} Với dữ liệu Bảng~\ref{tab:example_items} và $W=5$: vật phẩm B có mật độ cao nhất ($v/w = 10$), chọn B $\times 5$ lần cho trọng lượng $1 \times 5 = 5$ và giá trị $10 \times 5 = 50$.
+
+
+% --- 2.3: FRACTIONAL KNAPSACK ---
+\subsection{Fractional Knapsack}
+
+Trong bài toán Fractional Knapsack, mỗi vật phẩm có thể được chọn \textbf{một phần} (phân số từ 0 đến 1). Biến quyết định $x_i \in [0, 1]$.
+
+\textbf{Mô hình toán học:}
+\begin{align}
+    \text{Maximize} \quad & \sum_{i=1}^{n} v_i \cdot x_i \label{eq:frobj} \\
+    \text{subject to} \quad & \sum_{i=1}^{n} w_i \cdot x_i \leq W \label{eq:frcap} \\
+    & 0 \leq x_i \leq 1, \quad \forall i = 1, \ldots, n \label{eq:frfrac}
+\end{align}
+
+Đây chính là bài toán \textbf{quy hoạch tuyến tính} (LP). Khác biệt quan trọng: miền biến liên tục $[0,1]$ thay vì rời rạc, do đó bài toán giải được trong \textbf{thời gian đa thức} bằng chiến lược tham lam hoặc thuật toán Simplex~\cite{dantzig1957discrete}.
+
+Fractional Knapsack đóng vai trò quan trọng như \textbf{LP relaxation} của bài toán 0/1 Knapsack: nới lỏng ràng buộc $x_i \in \{0,1\}$ thành $x_i \in [0,1]$. Nghiệm tối ưu của LP relaxation luôn $\geq$ nghiệm tối ưu 0/1, tạo cận trên cho thuật toán Nhánh cận.
+
+\textbf{Ví dụ.} Với dữ liệu Bảng~\ref{tab:example_items} và $W=5$: sắp xếp theo mật độ giảm dần $B(10) > D(7.5) > C(6.67) > A(6)$, chọn lần lượt:
+\begin{itemize}[noitemsep]
+    \item B toàn bộ ($x_B=1$): trọng lượng $1$, còn lại $4$.
+    \item D toàn bộ ($x_D=1$): trọng lượng $2$, còn lại $2$.
+    \item C một phần ($x_C=2/3$): trọng lượng $3 \times 2/3 = 2$, còn lại $0$.
+\end{itemize}
+Tổng giá trị: $10 + 15 + 20 \times 2/3 = 38.33$. Lưu ý giá trị này cao hơn nghiệm 0/1 tối ưu ($37$).
+
+
+\textbf{So sánh tổng hợp.} Bảng~\ref{tab:compare_variants} tóm tắt sự khác biệt giữa ba biến thể.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l|ccc}
+\toprule
+\textbf{Đặc điểm} & \textbf{0/1} & \textbf{Unbounded} & \textbf{Fractional} \\
+\midrule
+Miền biến $x_i$ & $\{0, 1\}$ & $\mathbb{Z}_{\geq 0}$ & $[0, 1]$ \\
+Loại mô hình & ILP & IP & LP \\
+Độ phức tạp & NP-hard & NP-hard & $O(n \log n)$ \\
+Nghiệm ví dụ & 37 & 50 & 38.33 \\
+\bottomrule
+\end{tabular}
+\caption{So sánh ba biến thể bài toán Knapsack}
+\label{tab:compare_variants}
+\end{table}
+
+
+% ============================================================================
+% SECTION 3: CÁC CHIẾN LƯỢC CƠ BẢN
+% ============================================================================
+\section{Các chiến lược cơ bản}
+\label{sec:basic_strategies}
+
+Phần này trình bày các chiến lược giải cơ bản cho bài toán Knapsack. Với mỗi chiến lược, chúng tôi phân tích: (1) ý tưởng, (2) mã giả, (3) độ phức tạp thời gian và bộ nhớ, (4) tính chính xác của nghiệm.
+
+
+% --- 3.1: VÉT CẠN, QUAY LUI ---
+\subsection{Vét cạn và Quay lui}
+
+\subsubsection*{Vét cạn (Brute Force)}
+
+\textbf{Ý tưởng.} Liệt kê tất cả $2^n$ tập con của $n$ vật phẩm, kiểm tra tính khả thi (tổng trọng lượng $\leq W$), và chọn tập con có giá trị lớn nhất.
+
+Đây là phương pháp đơn giản nhất, luôn tìm được nghiệm tối ưu, nhưng có độ phức tạp theo hàm mũ khiến nó chỉ khả thi với $n$ rất nhỏ.
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Độ phức tạp thời gian:} $O(2^n)$ -- duyệt tất cả tập con.
+    \item \textbf{Độ phức tạp bộ nhớ:} $O(n)$ -- lưu tập con hiện tại.
+    \item \textbf{Tính chính xác:} Luôn cho nghiệm \textbf{tối ưu}.
+\end{itemize}
+
+\subsubsection*{Quay lui (Backtracking)}
+
+\textbf{Ý tưởng.} Cải tiến vét cạn bằng cách xây dựng nghiệm dần dần trên cây nhị phân (mỗi nút ứng với quyết định chọn/không chọn vật phẩm $i$), kết hợp \textbf{cắt tỉa} (pruning) để loại bỏ sớm các nhánh không triển vọng.
+
+Chiến lược cắt tỉa: tại mức $i$, nếu giá trị hiện tại cộng tổng giá trị của tất cả vật phẩm còn lại vẫn không vượt qua nghiệm tốt nhất đã biết, ta bỏ qua nhánh này.
+
+\begin{algorithm}[H]
+\caption{Quay lui cho 0/1 Knapsack}
+\label{alg:backtracking}
+\KwIn{Vật phẩm $(w_i, v_i)_{i=1}^{n}$, sức chứa $W$}
+\KwOut{Giá trị tối ưu $V^*$, tập chọn $S^*$}
+$V^* \leftarrow 0;\; S^* \leftarrow \emptyset$\;
+Tính trước: $\text{suffix}[i] = \sum_{j=i}^{n} v_j$ \tcp*{tổng giá trị từ $i$ đến $n$}
+\SetKwFunction{FBT}{Backtrack}
+\SetKwProg{Fn}{Function}{:}{}
+\Fn{\FBT{$i,\; w,\; v,\; S$}}{
+    \If{$v > V^*$}{
+        $V^* \leftarrow v;\; S^* \leftarrow S$\;
+    }
+    \If{$i > n$}{\Return}
+    \If(\tcp*[f]{Cắt tỉa}){$v + \text{suffix}[i] \leq V^*$}{\Return}
+    \If(\tcp*[f]{Chọn vật phẩm $i$}){$w + w_i \leq W$}{
+        \FBT{$i+1,\; w+w_i,\; v+v_i,\; S \cup \{i\}$}\;
+    }
+    \FBT{$i+1,\; w,\; v,\; S$} \tcp*{Không chọn vật phẩm $i$}
+}
+\FBT{$1,\; 0,\; 0,\; \emptyset$}\;
+\Return $V^*,\; S^*$\;
+\end{algorithm}
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Độ phức tạp thời gian:} $O(2^n)$ trường hợp xấu nhất, nhưng cắt tỉa giúp giảm đáng kể trong thực tế.
+    \item \textbf{Độ phức tạp bộ nhớ:} $O(n)$ -- ngăn xếp đệ quy sâu tối đa $n$.
+    \item \textbf{Tính chính xác:} Luôn cho nghiệm \textbf{tối ưu} (duyệt đủ không gian nghiệm).
+    \item \textbf{Phù hợp:} $n \leq 25$.
+\end{itemize}
+
+
+% --- 3.2: NHÁNH CẬN ---
+\subsection{Nhánh cận (Branch and Bound)}
+
+\textbf{Ý tưởng.} Nhánh cận~\cite{land1960automatic} cải tiến quay lui bằng cách sử dụng \textbf{cận trên} (upper bound) chặt hơn để cắt nhánh. Thay vì dùng tổng giá trị còn lại (lỏng), ta tính cận trên từ \textbf{LP relaxation} (Fractional Knapsack) -- nghiệm tối ưu của bài toán phân số luôn $\geq$ nghiệm tối ưu 0/1.
+
+\textbf{Tính cận trên tại nút cây.} Từ mức $i$ với trọng lượng hiện tại $w$ và giá trị $v$:
+\begin{enumerate}[noitemsep]
+    \item Sắp xếp các vật phẩm từ $i$ trở đi theo mật độ $v_j/w_j$ giảm dần.
+    \item Chọn tham lam toàn bộ cho đến khi không đủ sức chứa.
+    \item Vật phẩm cuối cùng: lấy phần lẻ (fractional) để tận dụng hết sức chứa.
+\end{enumerate}
+Cận trên này chặt hơn tổng suffix, giúp cắt nhiều nhánh hơn.
+
+\begin{algorithm}[H]
+\caption{Nhánh cận cho 0/1 Knapsack}
+\label{alg:bnb}
+\KwIn{Vật phẩm $(w_i, v_i)_{i=1}^{n}$ \textbf{đã sắp xếp giảm dần} theo $v_i/w_i$, sức chứa $W$}
+\KwOut{Giá trị tối ưu $V^*$, tập chọn $S^*$}
+$V^* \leftarrow 0;\; S^* \leftarrow \emptyset$\;
+
+\SetKwFunction{FUB}{UpperBound}
+\SetKwProg{Fn}{Function}{:}{}
+\Fn{\FUB{$i,\; w,\; v$}}{
+    $\text{bound} \leftarrow v;\; \text{rem} \leftarrow W - w$\;
+    \For{$j \leftarrow i$ \KwTo $n$}{
+        \eIf{$w_j \leq \text{rem}$}{
+            $\text{rem} \leftarrow \text{rem} - w_j;\; \text{bound} \leftarrow \text{bound} + v_j$\;
+        }{
+            $\text{bound} \leftarrow \text{bound} + v_j \times \text{rem} / w_j$\;
+            \textbf{break}\;
+        }
+    }
+    \Return bound\;
+}
+
+\SetKwFunction{FBranch}{Branch}
+\Fn{\FBranch{$i,\; w,\; v,\; S$}}{
+    \If{$v > V^*$}{$V^* \leftarrow v;\; S^* \leftarrow S$}
+    \If{$i > n$}{\Return}
+    \If(\tcp*[f]{Chọn}){$w + w_i \leq W$}{
+        \FBranch{$i+1,\; w+w_i,\; v+v_i,\; S \cup \{i\}$}\;
+    }
+    \If(\tcp*[f]{Cắt nhánh bằng LP bound}){$\FUB(i+1,\; w,\; v) > V^*$}{
+        \FBranch{$i+1,\; w,\; v,\; S$} \tcp*{Không chọn}
+    }
+}
+\FBranch{$1,\; 0,\; 0,\; \emptyset$}\;
+\Return $V^*,\; S^*$\;
+\end{algorithm}
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Độ phức tạp thời gian:} $O(2^n)$ trường hợp xấu nhất. Trong thực tế, LP bound cắt tỉa rất hiệu quả, đặc biệt khi hệ số tương quan Pearson giữa $w$ và $v$ thấp (xem Mục~\ref{sec:result}).
+    \item \textbf{Độ phức tạp bộ nhớ:} $O(n)$.
+    \item \textbf{Tính chính xác:} Luôn cho nghiệm \textbf{tối ưu}.
+    \item \textbf{Ưu điểm so với Quay lui:} Cận trên từ LP relaxation chặt hơn nhiều so với tổng suffix, giúp cắt được nhiều nhánh hơn trong hầu hết các trường hợp.
+\end{itemize}
+
+
+% --- 3.3: THAM LAM ---
+\subsection{Tham lam (Greedy)}
+
+\textbf{Ý tưởng.} Sắp xếp vật phẩm theo \textbf{mật độ giá trị} $v_i / w_i$ giảm dần, sau đó chọn lần lượt cho đến khi hết sức chứa. Chiến lược này tối ưu cho Fractional Knapsack nhưng chỉ là heuristic cho 0/1 Knapsack.
+
+\subsubsection*{Tham lam cho Fractional Knapsack (Tối ưu)}
+
+\begin{algorithm}[H]
+\caption{Tham lam cho Fractional Knapsack}
+\label{alg:greedy_frac}
+\KwIn{Vật phẩm $(w_i, v_i)_{i=1}^{n}$, sức chứa $W$}
+\KwOut{Giá trị tối ưu $V^*$, danh sách $(i, x_i)$}
+Sắp xếp vật phẩm giảm dần theo $v_i / w_i$\;
+$V^* \leftarrow 0;\; \text{rem} \leftarrow W$\;
+\For{$i \leftarrow 1$ \KwTo $n$}{
+    \If{$\text{rem} \leq 0$}{\textbf{break}}
+    \eIf{$w_i \leq \text{rem}$}{
+        $x_i \leftarrow 1;\; V^* \leftarrow V^* + v_i;\; \text{rem} \leftarrow \text{rem} - w_i$\;
+    }{
+        $x_i \leftarrow \text{rem} / w_i;\; V^* \leftarrow V^* + v_i \cdot x_i;\; \text{rem} \leftarrow 0$\;
+    }
+}
+\Return $V^*$\;
+\end{algorithm}
+
+\textbf{Tính tối ưu} (chứng minh tóm tắt): Giả sử nghiệm tham lam không tối ưu. Khi đó tồn tại nghiệm tối ưu $O$ khác nghiệm tham lam $G$ tại vật phẩm đầu tiên $k$. Vì $G$ chọn vật phẩm có mật độ cao nhất trước, ta có thể ``chuyển'' phần lượng từ vật phẩm mật độ thấp trong $O$ sang vật phẩm $k$ mà không giảm tổng giá trị -- mâu thuẫn với giả thiết $O$ tối ưu và khác $G$~\cite{dantzig1957discrete}.
+
+\subsubsection*{Tham lam cho 0/1 Knapsack (Heuristic)}
+
+Với 0/1 Knapsack, tham lam chọn toàn bộ vật phẩm (không chia lẻ), bỏ qua nếu không đủ sức chứa. Chiến lược này \textbf{không đảm bảo tối ưu}.
+
+\textbf{Phản ví dụ:} Cho $W = 10$, hai vật phẩm: $A$ $(w=6, v=6)$ và $B$ $(w=10, v=10)$. Mật độ: $A = 1.0 > B = 1.0$. Tham lam chọn $A$ (giá trị 6), nhưng nghiệm tối ưu là $B$ (giá trị 10).
+
+\textbf{Đánh giá chất lượng nghiệm:} Tham lam cho 0/1 Knapsack có thể cho nghiệm tệ tùy ý. Cụ thể, tỉ số $V_{\text{greedy}} / V^*$ có thể tiệm cận $0$ khi:
+\begin{itemize}[noitemsep]
+    \item Tồn tại một vật phẩm có trọng lượng gần bằng $W$ và giá trị rất cao.
+    \item Nhiều vật phẩm nhỏ có mật độ cao hơn nhưng tổng giá trị thấp.
+\end{itemize}
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Độ phức tạp thời gian:} $O(n \log n)$ cho sắp xếp, $O(n)$ cho chọn. Tổng: $O(n \log n)$.
+    \item \textbf{Độ phức tạp bộ nhớ:} $O(n)$ -- lưu mảng đã sắp xếp.
+    \item \textbf{Tính chính xác:} \textbf{Tối ưu} cho Fractional, \textbf{không tối ưu} cho 0/1.
+\end{itemize}
+
+
+% --- 3.4: QUY HOẠCH ĐỘNG ---
+\subsection{Quy hoạch động (Dynamic Programming)}
+
+\textbf{Ý tưởng.} Quy hoạch động~\cite{bellman1957dynamic} giải bài toán bằng cách chia thành các bài toán con gối nhau, lưu kết quả để tránh tính lại. Với Knapsack, ta xây dựng bảng $dp[i][w]$ = giá trị lớn nhất khi xét $i$ vật phẩm đầu tiên với sức chứa $w$.
+
+\subsubsection*{QHĐ cho 0/1 Knapsack}
+
+\textbf{Công thức truy hồi:}
+\begin{equation}
+dp[i][w] = \begin{cases}
+0 & \text{nếu } i = 0 \text{ hoặc } w = 0 \\
+dp[i-1][w] & \text{nếu } w_i > w \\
+\max\big(dp[i-1][w],\;\; dp[i-1][w-w_i] + v_i\big) & \text{ngược lại}
+\end{cases}
+\label{eq:dp01}
+\end{equation}
+
+Nghiệm tối ưu: $V^* = dp[n][W]$. Truy vết ngược để tìm tập vật phẩm được chọn.
+
+\begin{algorithm}[H]
+\caption{QHĐ cho 0/1 Knapsack}
+\label{alg:dp01}
+\KwIn{Vật phẩm $(w_i, v_i)_{i=1}^{n}$, sức chứa $W$ (nguyên)}
+\KwOut{Giá trị tối ưu $V^*$, tập chọn $S^*$}
+Khởi tạo $dp[0..n][0..W] \leftarrow 0$\;
+\For{$i \leftarrow 1$ \KwTo $n$}{
+    \For{$w \leftarrow 0$ \KwTo $W$}{
+        $dp[i][w] \leftarrow dp[i-1][w]$\;
+        \If{$w_i \leq w$ \textbf{and} $dp[i-1][w-w_i] + v_i > dp[i][w]$}{
+            $dp[i][w] \leftarrow dp[i-1][w-w_i] + v_i$\;
+        }
+    }
+}
+$V^* \leftarrow dp[n][W]$\;
+\tcp{Truy vết}
+$S^* \leftarrow \emptyset;\; w \leftarrow W$\;
+\For{$i \leftarrow n$ \KwTo $1$}{
+    \If{$dp[i][w] \neq dp[i-1][w]$}{
+        $S^* \leftarrow S^* \cup \{i\};\; w \leftarrow w - w_i$\;
+    }
+}
+\Return $V^*,\; S^*$\;
+\end{algorithm}
+
+\subsubsection*{QHĐ cho Unbounded Knapsack}
+
+\textbf{Công thức truy hồi} (mảng một chiều):
+\begin{equation}
+dp[w] = \max_{i:\; w_i \leq w} \big(dp[w-w_i] + v_i\big)
+\label{eq:dpub}
+\end{equation}
+
+Khác biệt chính: khi tính $dp[w]$, ta xét \textit{tất cả} vật phẩm (không chỉ $i-1$ vật đầu), vì mỗi vật phẩm được chọn nhiều lần.
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Độ phức tạp thời gian:} $O(nW)$ -- giả đa thức (pseudo-polynomial).
+    \item \textbf{Độ phức tạp bộ nhớ:} 0/1: $O(nW)$ cho bảng 2D (có thể tối ưu $O(W)$ nếu không cần truy vết). Unbounded: $O(W)$.
+    \item \textbf{Tính chính xác:} Luôn cho nghiệm \textbf{tối ưu}.
+    \item \textbf{Lưu ý:} Yêu cầu $w_i$ và $W$ là số nguyên. Nếu $W$ rất lớn, QHĐ không khả thi.
+\end{itemize}
+
+
+\textbf{So sánh tổng hợp các chiến lược cơ bản} cho bài toán 0/1 Knapsack:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l|cccc}
+\toprule
+\textbf{Chiến lược} & \textbf{Thời gian} & \textbf{Bộ nhớ} & \textbf{Tối ưu?} & \textbf{Ghi chú} \\
+\midrule
+Vét cạn & $O(2^n)$ & $O(n)$ & Có & Chỉ khả thi $n \leq 20$ \\
+Quay lui & $O(2^n)$ & $O(n)$ & Có & Cắt tỉa cải thiện thực tế \\
+Nhánh cận & $O(2^n)$ & $O(n)$ & Có & LP bound rất hiệu quả \\
+Tham lam & $O(n \log n)$ & $O(n)$ & Không & Nhanh, nghiệm gần đúng \\
+Quy hoạch động & $O(nW)$ & $O(nW)$ & Có & Cần $W$ nguyên, không quá lớn \\
+\bottomrule
+\end{tabular}
+\caption{So sánh các chiến lược cơ bản cho 0/1 Knapsack}
+\label{tab:compare_strategies}
+\end{table}
+
+
+% ============================================================================
+% SECTION 4: QUY HOẠCH TUYẾN TÍNH -- FRACTIONAL KNAPSACK
+% ============================================================================
+\section{Quy hoạch tuyến tính trong bài toán Fractional Knapsack}
+\label{sec:linear_optimization}
+
+% TODO: Mô hình LP chuẩn, thuật toán Simplex đơn hình (Primal/Dual), phân tích đối ngẫu
+
+
+% ============================================================================
+% SECTION 5: QUY HOẠCH NGUYÊN -- 0/1 VÀ UNBOUNDED
+% ============================================================================
+\section{Quy hoạch nguyên trong bài toán Unbounded Knapsack và 0/1 Knapsack}
+\label{sec:integer_optimization}
+
+% TODO: Mô hình IP, Branch and Bound Simplex, lát cắt Gomory
+
+
+% ============================================================================
+% SECTION 6: THỰC NGHIỆM
+% ============================================================================
+\section{Thực nghiệm, so sánh và đánh giá}
+\label{sec:result}
+
+\subsection{Quy trình thực nghiệm}
+% TODO: Pipeline sinh dữ liệu, chạy benchmark, đo thời gian
+
+\subsection{Trực quan và so sánh}
+% TODO: Biểu đồ so sánh thời gian, chất lượng nghiệm
+
+\subsection{Đánh giá}
+% TODO: Phân tích kết quả, nhận xét
+
+
+% ============================================================================
+% SECTION 7: KẾT LUẬN
+% ============================================================================
+\section{Kết luận}
+\label{sec:concl}
+
+% TODO: Tóm tắt kết quả, hạn chế, hướng phát triển
+
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
