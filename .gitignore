@@ -1,0 +1,9 @@
+# Byte-compiled / optimized / DLL support
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cài đặt môi trường ảo (nếu có)
+.venv/
+venv/
+env/
