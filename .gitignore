@@ -12,5 +12,14 @@ venv/
 env/
 
 # Generated data/results
-data/raw/
-results/
+data/raw/*
+!data/raw/
+!data/raw/.gitkeep
+results/*
+!results/
+!results/csv/
+!results/csv/.gitkeep
+!results/plots/
+!results/plots/.gitkeep
+!results/quality/
+!results/quality/.gitkeep
