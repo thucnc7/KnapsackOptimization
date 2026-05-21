@@ -126,7 +126,7 @@ class TestcaseQualityAnalyzer:
 
         for i, anchor in enumerate(anchors):
             sub = self.df[self.df[col_anchor] == anchor][col_actual]
-            if sub.empty or sub.std() == 0:
+            if sub.empty or len(sub) < 2:
                 continue
             color = ACCENT[i % len(ACCENT)]
             label = f"anchor={anchor:g}"
