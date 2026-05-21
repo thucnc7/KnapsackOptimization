@@ -108,11 +108,12 @@ def _load_instances(raw_dir: Path) -> List[Tuple[str, KnapsackInstance, Dict[str
 
 
 def _density_variance(items: Sequence[Item]) -> float:
-    if not items:
+    if not items or len(items) <= 1:
         return 0.0
     densities = [item.density for item in items]
     mean_density = sum(densities) / len(densities)
-    variance = sum((d - mean_density) ** 2 for d in densities) / len(densities)
+    # Sample variance (/ n-1) to match models.py _calculate_metadata
+    variance = sum((d - mean_density) ** 2 for d in densities) / (len(densities) - 1)
     return variance
 
 
@@ -226,7 +227,7 @@ def _build_row(
         "n": int(metadata.get("n", len(instance.items))),
         "capacity": int(round(instance.capacity)),
         "capacity_to_weight_ratio": metadata.get(
-            "capacity_ratio_input",
+            "capacity_ratio_anchor",
             metadata.get("capacity_ratio", 0.0),
         ),
         "pearson_corr": metadata.get(
