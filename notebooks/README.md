@@ -1,7 +1,7 @@
 # Notebooks
 
 ## 02_analysis_and_plots.ipynb
-Notebook phân tích và trực quan hóa kết quả từ `results/csv/benchmark_results.csv`.
+Notebook phân tích và trực quan hóa kết quả từ `results/csv/benchmark_results_timeout5.csv` (có thể đổi trong biến `CSV_PATH`).
 
 ### Cách chạy
 1. Đảm bảo đã cài đủ thư viện trong `requirements.txt`.

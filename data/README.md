@@ -136,6 +136,7 @@ python data/quality.py
 Script sẽ in bảng thống kê tóm tắt ra terminal và lưu một **dashboard 9 biểu đồ** vào `results/quality/quality_dashboard.png`.
 Ngoài ra, module còn lưu:
 - `results/quality/metadata_uniformity.png`
+- `results/quality/metadata_distributions.png`
 - `results/quality/metadata_independence.png`
 
 Tham số CLI:
@@ -158,6 +159,11 @@ Tham số CLI:
 | 7 | Box plot: density_cv theo (n, r) | Độ phân tán mật độ theo kích thước và tương quan |
 | 8 | Violin: Pearson r thực tế theo n | Xem r thực tế phân tán ra sao theo n |
 | 9 | Heatmap: Correlation metadata | Tương quan giữa các chỉ số metadata |
+
+**Các ảnh kiểm tra metadata bổ sung:**
+- `metadata_uniformity.png`: bar chart + scatter tổng hợp để nhìn độ đều.
+- `metadata_distributions.png`: scatter 1D theo từng đại lượng (`n`, `capacity_ratio_input`, `target_pearson_r`, `max_weight`).
+- `metadata_independence.png`: heatmap Spearman giữa các metadata.
 
 ---
 

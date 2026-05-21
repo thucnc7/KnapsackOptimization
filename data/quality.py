@@ -91,7 +91,7 @@ class TestcaseQualityAnalyzer:
         )
         return df
 
-    # ── Public API ────────────────────────────────────────────────────────────
+    # ── Public API ──────────────────────────────�������─────────────────────────────
 
     def print_summary(self) -> None:
         """Print a concise statistical summary to stdout."""
@@ -180,7 +180,7 @@ class TestcaseQualityAnalyzer:
         self._plot_metadata_count(ax1, "n", "N distribution")
         self._plot_metadata_count(ax2, "capacity_ratio_input", "Capacity ratio (input) distribution")
         self._plot_metadata_count(ax3, "target_pearson_r", "Target Pearson r distribution")
-        self._plot_metadata_count(ax4, "max_weight", "Max weight distribution")
+        self._plot_metadata_scatter(ax4)
 
         if output_dir:
             out = Path(output_dir)
@@ -188,6 +188,35 @@ class TestcaseQualityAnalyzer:
             save_path = out / "metadata_uniformity.png"
             fig.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
             print(f"Metadata uniformity saved -> {save_path}")
+
+        plt.show()
+
+        fig_hist = plt.figure(figsize=(18, 10), facecolor=FIG_BG)
+        fig_hist.suptitle(
+            "Metadata 1D Scatter Distributions",
+            fontsize=16, color=TEXT_COLOR, fontweight="bold", y=0.98,
+        )
+        gs_hist = gridspec.GridSpec(
+            2, 2, figure=fig_hist,
+            hspace=0.35, wspace=0.25,
+            left=0.06, right=0.97, top=0.92, bottom=0.08,
+        )
+        hx1 = fig_hist.add_subplot(gs_hist[0, 0])
+        hx2 = fig_hist.add_subplot(gs_hist[0, 1])
+        hx3 = fig_hist.add_subplot(gs_hist[1, 0])
+        hx4 = fig_hist.add_subplot(gs_hist[1, 1])
+
+        self._plot_metadata_strip(hx1, "n", "N distribution (scatter)")
+        self._plot_metadata_strip(hx2, "capacity_ratio_input", "Capacity ratio (input) (scatter)")
+        self._plot_metadata_strip(hx3, "target_pearson_r", "Target Pearson r (scatter)")
+        self._plot_metadata_strip(hx4, "max_weight", "Max weight (scatter)")
+
+        if output_dir:
+            out = Path(output_dir)
+            out.mkdir(parents=True, exist_ok=True)
+            save_path = out / "metadata_distributions.png"
+            fig_hist.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
+            print(f"Metadata distributions saved -> {save_path}")
 
         plt.show()
 
@@ -381,6 +410,56 @@ class TestcaseQualityAnalyzer:
         ax.legend(fontsize=7, facecolor=AX_BG, edgecolor="#444466", labelcolor=TEXT_COLOR)
         self._style_ax(ax, title)
 
+    def _plot_metadata_scatter(self, ax: plt.Axes) -> None:
+        """Scatter plot to eyeball metadata uniformity across instances."""
+        cols = ["n", "capacity_ratio_input", "target_pearson_r", "max_weight"]
+        sub = self.df[cols].dropna()
+        if sub.empty:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
+            self._style_ax(ax, "Metadata Scatter (uniformity check)")
+            return
+
+        x = np.arange(len(sub))
+        palette = plt.colormaps["plasma"].resampled(len(cols))
+        for i, col in enumerate(cols):
+            ax.scatter(x, sub[col], s=12, alpha=0.6, color=palette(i), label=col)
+
+        ax.set_xlabel("Instance index")
+        ax.set_ylabel("Value")
+        ax.legend(fontsize=7, facecolor=AX_BG, edgecolor="#444466", labelcolor=TEXT_COLOR)
+        self._style_ax(ax, "Metadata Scatter (uniformity check)")
+
+    def _plot_metadata_histogram(self, ax: plt.Axes, column: str, title: str) -> None:
+        """Histogram for a single metadata column."""
+        series = self.df[column].dropna()
+        if series.empty:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
+            self._style_ax(ax, title)
+            return
+
+        bins = 12 if series.nunique() > 12 else max(series.nunique(), 4)
+        ax.hist(series, bins=bins, color=ACCENT, alpha=0.8, edgecolor="#222233")
+        ax.set_xlabel(column)
+        ax.set_ylabel("Count")
+        self._style_ax(ax, title)
+
+    def _plot_metadata_strip(self, ax: plt.Axes, column: str, title: str) -> None:
+        """1D scatter (strip) plot for a single metadata column."""
+        series = self.df[column].dropna()
+        if series.empty:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
+            self._style_ax(ax, title)
+            return
+
+        rng = np.random.default_rng(0)
+        x = rng.uniform(-0.15, 0.15, size=len(series))
+        ax.scatter(x, series, s=14, alpha=0.7, color=ACCENT, linewidths=0)
+        ax.set_xlim(-0.4, 0.4)
+        ax.set_xticks([])
+        ax.set_xlabel(column)
+        ax.set_ylabel("Value")
+        self._style_ax(ax, title)
+
     def _plot_metadata_heatmap(
         self,
         ax: plt.Axes,
@@ -418,7 +497,7 @@ class TestcaseQualityAnalyzer:
         self._style_ax(ax, title)
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
+# ── CLI ────��──────────────────────────────────────────────────────────────────
 
 def main() -> None:
     import argparse

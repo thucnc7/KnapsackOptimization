@@ -10,6 +10,12 @@ Từ thư mục gốc của dự án:
 python -u "E:\Antigravity Workspace\Knapsack\KnapsackOptimization\benchmark\runner.py" --limit 1 --timeout 5
 ```
 
+Ví dụ tạo file riêng cho timeout 5s:
+
+```cmd
+python -u "E:\Antigravity Workspace\Knapsack\KnapsackOptimization\benchmark\runner.py" --timeout 5 --output "E:\Antigravity Workspace\Knapsack\KnapsackOptimization\results\csv\benchmark_results_timeout5.csv"
+```
+
 ## Tùy chọn lệnh
 
 - `--raw`: thư mục chứa các instance JSON (mặc định `data/raw`)
@@ -24,6 +30,13 @@ CSV xuất ra gồm các cột:
 - `test_id`, `algorithm`, `knapsack_type`, `status`
 - `time_sec`, `peak_memory_mb`, `optimal_value`
 - `n`, `capacity`, `capacity_to_weight_ratio`, `pearson_corr`, `density_variance`
+
+## Trạng thái `status`
+
+- `SUCCESS`: thuật toán chạy xong, có nghiệm.
+- `TIMEOUT`: vượt quá `--timeout`.
+- `OOM`: hết bộ nhớ trong tiến trình thuật toán.
+- `ERROR`: lỗi khác (exception).
 
 ## Ghi chú
 
