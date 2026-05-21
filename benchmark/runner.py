@@ -249,38 +249,6 @@ def run_benchmark(
 
     algorithms = list(get_algorithm_registry())
     rows: List[Dict[str, Any]] = []
-    total_tasks = len(instances) * len(algorithms)
-
-    with tqdm(total=total_tasks, desc="Benchmarking", unit="run") as progress:
-        for test_id, instance, payload_metadata in instances:
-            for algo in algorithms:
-                status, result, exec_time, peak_mb = run_with_profiler(
-                    _execute_algorithm,
-                    (algo.factory, instance, algo.target_knapsack_type),
-                    timeout_sec=timeout_sec,
-                )
-
-                if status != STATUS_SUCCESS:
-                    optimal_value = -1
-                    knapsack_type = _normalize_knapsack_type(algo.target_knapsack_type)
-                else:
-                    result_value, knapsack_type = result
-                    optimal_value = _extract_optimal_value(result_value)
-
-                rows.append(
-                    _build_row(
-                        test_id=test_id,
-                        algorithm=algo,
-                        knapsack_type=knapsack_type,
-                        status=status,
-                        exec_time=exec_time,
-                        peak_memory_mb=peak_mb,
-                        optimal_value=optimal_value,
-                        instance=instance,
-                        payload_metadata=payload_metadata,
-                    )
-                )
-                progress.update(1)
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
@@ -297,12 +265,75 @@ def run_benchmark(
         "pearson_corr",
         "density_variance",
     ]
-    with output_csv.open("w", newline="", encoding="utf-8") as handle:
+
+    completed = _load_existing_keys(output_csv)
+    total_tasks = len(instances) * len(algorithms)
+    skipped = len(completed)
+
+    write_header = not output_csv.exists() or output_csv.stat().st_size == 0
+    with output_csv.open("a", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+        if write_header:
+            writer.writeheader()
+            handle.flush()
+
+        with tqdm(total=total_tasks, desc="Benchmarking", unit="run") as progress:
+            if skipped:
+                progress.update(min(skipped, total_tasks))
+            for test_id, instance, payload_metadata in instances:
+                for algo in algorithms:
+                    if (test_id, algo.name) in completed:
+                        continue
+
+                    status, result, exec_time, peak_mb = run_with_profiler(
+                        _execute_algorithm,
+                        (algo.factory, instance, algo.target_knapsack_type),
+                        timeout_sec=timeout_sec,
+                    )
+
+                    if status != STATUS_SUCCESS:
+                        optimal_value = -1
+                        knapsack_type = _normalize_knapsack_type(algo.target_knapsack_type)
+                    else:
+                        result_value, knapsack_type = result
+                        optimal_value = _extract_optimal_value(result_value)
+
+                    row = _build_row(
+                        test_id=test_id,
+                        algorithm=algo,
+                        knapsack_type=knapsack_type,
+                        status=status,
+                        exec_time=exec_time,
+                        peak_memory_mb=peak_mb,
+                        optimal_value=optimal_value,
+                        instance=instance,
+                        payload_metadata=payload_metadata,
+                    )
+                    writer.writerow(row)
+                    handle.flush()
+                    rows.append(row)
+                    completed.add((test_id, algo.name))
+                    progress.update(1)
 
     return rows
+
+
+def _load_existing_keys(output_csv: Path) -> set[tuple[str, str]]:
+    if not output_csv.exists():
+        return set()
+    completed: set[tuple[str, str]] = set()
+    try:
+        with output_csv.open("r", newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                test_id = (row.get("test_id") or "").strip()
+                algorithm = (row.get("algorithm") or "").strip()
+                if test_id and algorithm:
+                    completed.add((test_id, algorithm))
+    except (csv.Error, OSError):
+        # If the CSV is partially written or corrupted, resume from what we can parse.
+        pass
+    return completed
 
 
 def parse_args() -> argparse.Namespace:
