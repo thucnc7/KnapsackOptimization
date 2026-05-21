@@ -1,4 +1,11 @@
-"""Generate JSON benchmark instances for the 0/1 knapsack problem."""
+"""Generate JSON benchmark instances for the 0/1 knapsack problem.
+
+Key design decisions (v3 – Gaussian Jitter + Rejection Sampling):
+  - n_actual   = N(n, 0.10·n)          clamped to >= 2
+  - ratio_actual = N(ratio, 0.05·ratio) clamped to [0.01, 1.0]
+  - When target_pearson_r >= 0.9, rejection-sample until the realised
+    Pearson r is within 0.03 of the target (max 200 attempts).
+"""
 
 from __future__ import annotations
 
@@ -6,9 +13,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import numpy as np
+from scipy.stats import pearsonr as _pearsonr
 from tqdm import tqdm
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -18,8 +26,11 @@ if str(ROOT_DIR) not in sys.path:
 from src.models import Item, KnapsackInstance
 
 DEFAULT_MAX_WEIGHT = 1000
-DEFAULT_CAPACITY_RATIO = 0.5
 
+_MAX_REJECTION_ATTEMPTS = 200
+
+
+# ── Core generation ──────────────────────────────────────────────────────────
 
 def _generate_with_target_correlation(
     rng: np.random.Generator,
@@ -27,13 +38,10 @@ def _generate_with_target_correlation(
     max_weight: int,
     target_pearson_r: float,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Generate (weights, values) arrays targeting a specific Pearson correlation.
+    """Generate (weights, values) targeting a specific Pearson correlation.
 
-    Uses the Cholesky / linear-combination method:
-      - x ~ N(0,1) for weights
-      - y = r*x + sqrt(1-r²)*z  where z ~ N(0,1) independent
-    Both arrays are then scaled to integer values in [1, max_weight].
-    The realised correlation converges to target_pearson_r as n grows.
+    Uses the Cholesky method:  y = r·x + sqrt(1-r²)·z
+    then scales both arrays to [1, max_weight].
     """
     r = float(np.clip(target_pearson_r, -1.0, 1.0))
 
@@ -51,8 +59,62 @@ def _generate_with_target_correlation(
     return _scale(x), _scale(y)
 
 
+def _generate_with_rejection(
+    rng: np.random.Generator,
+    n: int,
+    max_weight: int,
+    target_pearson_r: float,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Wrapper: rejection-sample when target_pearson_r >= 0.9.
+
+    Ensures the realised Pearson r is within 0.03 of the target.
+    Falls back to best attempt after _MAX_REJECTION_ATTEMPTS.
+    """
+    need_rejection = target_pearson_r >= 0.9
+    tolerance = 0.03
+
+    best_w, best_v = None, None
+    best_err = float("inf")
+
+    for _ in range(_MAX_REJECTION_ATTEMPTS if need_rejection else 1):
+        w, v = _generate_with_target_correlation(rng, n, max_weight, target_pearson_r)
+
+        if not need_rejection:
+            return w, v
+
+        if n < 3:
+            return w, v
+
+        actual_r, _ = _pearsonr(w.astype(float), v.astype(float))
+        err = abs(actual_r - target_pearson_r)
+
+        if err < best_err:
+            best_err = err
+            best_w, best_v = w, v
+
+        if err <= tolerance:
+            return w, v
+
+    return best_w, best_v
+
+
+def _jitter_n(rng: np.random.Generator, n_anchor: int) -> int:
+    """Apply Gaussian jitter:  n_actual = N(n, 0.10·n), clamped >= 2."""
+    sigma = max(1.0, n_anchor * 0.10)
+    n_actual = int(round(rng.normal(loc=n_anchor, scale=sigma)))
+    return max(2, n_actual)
+
+
+def _jitter_ratio(rng: np.random.Generator, ratio_anchor: float) -> float:
+    """Apply Gaussian jitter: ratio_actual = N(ratio, 0.05·ratio), [0.01, 1.0]."""
+    sigma = max(0.005, ratio_anchor * 0.05)
+    ratio_actual = rng.normal(loc=ratio_anchor, scale=sigma)
+    return float(np.clip(ratio_actual, 0.01, 1.0))
+
+
+# ── Build helpers ────────────────────────────────────────────────────────────
+
 def _build_items(weights: np.ndarray, values: np.ndarray) -> List[Item]:
-    """Convert numpy arrays into Item records."""
     return [
         Item(id=int(idx), weight=float(w), value=float(v))
         for idx, (w, v) in enumerate(zip(weights, values))
@@ -62,165 +124,172 @@ def _build_items(weights: np.ndarray, values: np.ndarray) -> List[Item]:
 def _instance_to_json_dict(
     instance: KnapsackInstance,
     test_id: str,
+    *,
+    n_anchor: int,
+    n_actual: int,
     target_pearson_r: float,
-    capacity_ratio_input: float,
+    ratio_anchor: float,
+    ratio_actual: float,
     max_weight: int,
     seed: int,
     instance_seed: int,
 ) -> dict:
-    """Serialize a KnapsackInstance to a JSON-ready dictionary."""
     return {
         "test_id": test_id,
         "capacity": instance.capacity,
         "metadata": {
             **instance.metadata,
+            "n_anchor": n_anchor,
+            "n_actual": n_actual,
             "target_pearson_r": target_pearson_r,
-            "capacity_ratio_input": capacity_ratio_input,
+            "capacity_ratio_anchor": ratio_anchor,
+            "capacity_ratio_actual": ratio_actual,
             "max_weight": max_weight,
             "seed": seed,
             "instance_seed": instance_seed,
         },
         "items": [
-            {"id": item.id, "weight": item.weight, "value": item.value}
-            for item in instance.items
+            {"id": it.id, "weight": it.weight, "value": it.value}
+            for it in instance.items
         ],
     }
 
 
 def generate_instance(
-    n: int,
-    ratio: float,
+    n_anchor: int,
+    ratio_anchor: float,
     target_pearson_r: float,
     instance_index: int,
     rng: np.random.Generator,
     scenario_name: str,
     max_weight: int = DEFAULT_MAX_WEIGHT,
-) -> Tuple[KnapsackInstance, str]:
-    """Generate a single knapsack instance and return it with its test_id."""
-    weights, values = _generate_with_target_correlation(rng, n, max_weight, target_pearson_r)
+) -> Tuple[KnapsackInstance, str, int, float]:
+    """Generate a single instance with Gaussian jitter on n and ratio.
+
+    Returns (instance, test_id, n_actual, ratio_actual).
+    """
+    n_actual = _jitter_n(rng, n_anchor)
+    ratio_actual = _jitter_ratio(rng, ratio_anchor)
+
+    weights, values = _generate_with_rejection(
+        rng, n_actual, max_weight, target_pearson_r
+    )
     total_weight = float(np.sum(weights))
-    capacity = total_weight * ratio
+    capacity = total_weight * ratio_actual
 
     items = _build_items(weights, values)
     instance = KnapsackInstance(items=items, capacity=capacity)
 
-    index_str = f"{instance_index:02d}"
-    ratio_str = f"{ratio:g}"
-    r_str = f"{target_pearson_r:g}"
+    idx_str = f"{instance_index:02d}"
     test_id = (
-        f"{scenario_name}_n{n}_wmax{max_weight}_cr{ratio_str}_pr{r_str}_{index_str}"
+        f"{scenario_name}_n{n_anchor}_wmax{max_weight}"
+        f"_cr{ratio_anchor:g}_pr{target_pearson_r:g}_{idx_str}"
     )
-    return instance, test_id
+    return instance, test_id, n_actual, ratio_actual
 
 
 def save_instance(
     instance: KnapsackInstance,
     test_id: str,
     output_dir: Path,
+    *,
+    n_anchor: int,
+    n_actual: int,
     target_pearson_r: float,
-    capacity_ratio_input: float,
+    ratio_anchor: float,
+    ratio_actual: float,
     max_weight: int,
     seed: int,
     instance_seed: int,
 ) -> Path:
-    """Write the instance as JSON to the output directory."""
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"{test_id}.json"
     data = _instance_to_json_dict(
-        instance,
-        test_id,
-        target_pearson_r,
-        capacity_ratio_input,
-        max_weight,
-        seed,
-        instance_seed,
+        instance, test_id,
+        n_anchor=n_anchor,
+        n_actual=n_actual,
+        target_pearson_r=target_pearson_r,
+        ratio_anchor=ratio_anchor,
+        ratio_actual=ratio_actual,
+        max_weight=max_weight,
+        seed=seed,
+        instance_seed=instance_seed,
     )
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2)
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
     return path
 
 
+# ── CLI ──────────────────────────────────────────────────────────────────────
+
 def parse_args() -> argparse.Namespace:
-    """Parse CLI arguments for instance generation."""
     parser = argparse.ArgumentParser(
-        description="Generate 0/1 knapsack benchmark instances from scenarios."
+        description="Generate 0/1 knapsack benchmark instances."
     )
     parser.add_argument(
-        "--config",
-        type=Path,
+        "--config", type=Path,
         default=Path(__file__).resolve().parent / "test_scenarios.json",
-        help="Path to the scenario configuration JSON file.",
     )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility.",
-    )
+    parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
 
 def main() -> None:
-    """CLI entry point for the generator."""
     args = parse_args()
     output_dir = Path(__file__).resolve().parent / "raw"
     seed = args.seed
 
-    with args.config.open("r", encoding="utf-8") as handle:
-        scenarios = json.load(handle)
+    with args.config.open("r", encoding="utf-8") as fh:
+        scenarios = json.load(fh)
 
-    total_tasks = 0
-    for scenario in scenarios:
-        total_tasks += (
-            len(scenario["n_values"])
-            * len(scenario["capacity_ratios"])
-            * len(scenario["pearson_r_targets"])
-            * scenario["instances_per_config"]
-        )
+    total = sum(
+        len(s["n_values"])
+        * len(s["capacity_ratios"])
+        * len(s["pearson_r_targets"])
+        * s["instances_per_config"]
+        for s in scenarios
+    )
 
-    with tqdm(total=total_tasks, desc="Generating instances") as progress:
+    with tqdm(total=total, desc="Generating instances") as pbar:
         for scenario in scenarios:
-            scenario_name = scenario["name"]
-            n_values = scenario["n_values"]
-            ratios = scenario["capacity_ratios"]
-            pearson_r_targets = scenario["pearson_r_targets"]
-            instances_per_config = scenario["instances_per_config"]
-            scenario_max_weight = int(scenario.get("max_weight", DEFAULT_MAX_WEIGHT))
-
-            for n in n_values:
-                for ratio in ratios:
-                    ratio_scaled = int(round(ratio * 1000))
-                    for target_r in pearson_r_targets:
-                        r_scaled = int(round(target_r * 1000))
-                        for index in range(1, instances_per_config + 1):
-                            instance_seed = (
+            name = scenario["name"]
+            mw = int(scenario.get("max_weight", DEFAULT_MAX_WEIGHT))
+            for n_anchor in scenario["n_values"]:
+                for ratio_anchor in scenario["capacity_ratios"]:
+                    ratio_sc = int(round(ratio_anchor * 1000))
+                    for target_r in scenario["pearson_r_targets"]:
+                        r_sc = int(round(target_r * 1000))
+                        for idx in range(1, scenario["instances_per_config"] + 1):
+                            iseed = (
                                 seed * 1_000_003
-                                + n * 101
-                                + ratio_scaled * 1009
-                                + r_scaled * 9176
-                                + index
+                                + n_anchor * 101
+                                + ratio_sc * 1009
+                                + r_sc * 9176
+                                + idx
                             ) % (2**32)
-                            rng = np.random.default_rng(instance_seed)
-                            instance, test_id = generate_instance(
-                                n=n,
-                                ratio=ratio,
+                            rng = np.random.default_rng(iseed)
+
+                            inst, tid, n_act, r_act = generate_instance(
+                                n_anchor=n_anchor,
+                                ratio_anchor=ratio_anchor,
                                 target_pearson_r=target_r,
-                                instance_index=index,
+                                instance_index=idx,
                                 rng=rng,
-                                scenario_name=scenario_name,
-                                max_weight=scenario_max_weight,
+                                scenario_name=name,
+                                max_weight=mw,
                             )
                             save_instance(
-                                instance=instance,
-                                test_id=test_id,
-                                output_dir=output_dir,
+                                inst, tid, output_dir,
+                                n_anchor=n_anchor,
+                                n_actual=n_act,
                                 target_pearson_r=target_r,
-                                capacity_ratio_input=ratio,
-                                max_weight=scenario_max_weight,
+                                ratio_anchor=ratio_anchor,
+                                ratio_actual=r_act,
+                                max_weight=mw,
                                 seed=seed,
-                                instance_seed=instance_seed,
+                                instance_seed=iseed,
                             )
-                            progress.update(1)
+                            pbar.update(1)
 
 
 if __name__ == "__main__":

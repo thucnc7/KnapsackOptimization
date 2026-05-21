@@ -1,23 +1,20 @@
 # Data Management Component
 
-Thư mục này quản lý cấu hình và tự động sinh tập dữ liệu thử nghiệm (Benchmark Datasets)
-cho bài toán Ba lô 0/1. Hệ thống chạy theo cơ chế **config-driven**, tách biệt hoàn toàn
-giữa tham số kịch bản và mã nguồn sinh dữ liệu.
+Thu muc nay quan ly cau hinh va tu dong sinh tap du lieu thu nghiem (Benchmark Datasets)
+cho bai toan Ba lo 0/1. He thong chay theo co che **config-driven**, tach biet hoan toan
+giua tham so kich ban va ma nguon sinh du lieu.
 
 ---
 
-## 1. Cấu hình kịch bản (`test_scenarios.json`)
+## 1. Cau hinh kich ban (`test_scenarios.json`)
 
-File `data/test_scenarios.json` lưu một mảng các kịch bản. Bạn có thể thay đổi các tham
-số để điều khiển số lượng và tính chất dữ liệu đầu ra.
-
-Ví dụ cấu hình:
+File `data/test_scenarios.json` luu mot mang cac kich ban:
 
 ```json
 [
   {
     "name": "benchmark_core",
-    "description": "Bo testcase chuan de so sanh cong bang giua fractional va 0/1 (n, capacity_ratio, pearson_r).",
+    "description": "Mo ta kich ban",
     "n_values": [10, 50, 100, 500],
     "max_weight": 1000,
     "capacity_ratios": [0.1, 0.5, 0.9],
@@ -27,163 +24,147 @@ Ví dụ cấu hình:
 ]
 ```
 
-Ý nghĩa tham số:
-
-| Tham số | Bắt buộc | Mô tả |
+| Tham so | Bat buoc | Mo ta |
 |---|---|---|
-| `name` | ✅ | Tên kịch bản (dùng làm tiền tố đặt tên file). |
-| `description` | ❌ | Mô tả mục đích kịch bản. |
-| `n_values` | ✅ | Danh sách số lượng vật phẩm cần sinh. |
-| `max_weight` | ❌ | Khối lượng tối đa mỗi vật phẩm (mặc định `1000`). |
-| `capacity_ratios` | ✅ | Tỷ lệ sức chứa W so với tổng khối lượng `sum(w_i)`. |
-| `pearson_r_targets` | ✅ | Danh sách hệ số tương quan Pearson mục tiêu giữa `weight` và `value`. Giá trị trong `[-1.0, 1.0]`. |
-| `instances_per_config` | ✅ | Số file sinh ra cho mỗi tổ hợp tham số. |
+| `name` | Co | Ten kich ban (tien to ten file). |
+| `description` | Khong | Mo ta muc dich kich ban. |
+| `n_values` | Co | Danh sach so luong vat pham (gia tri neo). |
+| `max_weight` | Khong | Khoi luong toi da moi vat pham (mac dinh `1000`). |
+| `capacity_ratios` | Co | Ty le suc chua W so voi tong khoi luong (gia tri neo). |
+| `pearson_r_targets` | Co | He so tuong quan Pearson muc tieu giua `weight` va `value`. |
+| `instances_per_config` | Co | So file sinh ra cho moi to hop tham so. |
 
-> **Ghi chú về `pearson_r_targets`:**
-> - `0.0` → Hoàn toàn ngẫu nhiên (uncorrelated) — bài toán trung bình.
-> - `0.5` → Tương quan vừa phải (weakly correlated).
-> - `0.95` → Tương quan cao (strongly correlated) — làm suy yếu khả năng cắt nhánh của Branch & Bound.
-
----
-
-## 1.1. Các kịch bản hiện có
-
-Các kịch bản mặc định trong `data/test_scenarios.json`:
-
-- `benchmark_core`: bộ chuẩn để so sánh công bằng giữa fractional và 0/1.
-- `benchmark_stress`: bộ stress để kiểm tra mở rộng (capacity lớn).
-- `extreme_n_test`: bộ cực đại về n để thử giới hạn Greedy/DP.
+> **Ghi chu ve `pearson_r_targets`:**
+> - `0.0` — Hoan toan ngau nhien (uncorrelated).
+> - `0.5` — Tuong quan vua phai (weakly correlated).
+> - `0.95` — Tuong quan cao (strongly correlated) — lam suy yeu kha nang cat nhanh cua Branch & Bound.
 
 ---
 
-## 2. Thực thi sinh dữ liệu (`generator.py`)
-
-Sau khi cấu hình kịch bản, chạy lệnh từ thư mục gốc của dự án:
+## 2. Thuc thi sinh du lieu (`generator.py`)
 
 ```bash
-# Chạy với seed mặc định (42)
+# Chay voi seed mac dinh (42)
 python data/generator.py
 
-# Chạy với seed tuỳ chọn
+# Chay voi seed tuy chon
 python data/generator.py --seed 123
 
-# Chạy với file config khác
+# Chay voi file config khac
 python data/generator.py --config path/to/config.json --seed 42
 ```
 
-Tham số CLI:
-
-| Tham số | Mặc định | Mô tả |
+| Tham so | Mac dinh | Mo ta |
 |---|---|---|
-| `--config` | `data/test_scenarios.json` | Đường dẫn file cấu hình kịch bản. |
-| `--seed` | `42` | Seed ngẫu nhiên, đảm bảo kết quả tái tạo được (reproducible). |
+| `--config` | `data/test_scenarios.json` | Duong dan file cau hinh. |
+| `--seed` | `42` | Seed ngau nhien (reproducible). |
 
-> **Lưu ý:** Cùng `--seed` sẽ luôn sinh ra **đúng bộ dữ liệu giống nhau**.
-> Mỗi testcase còn lưu `instance_seed` để tái tạo từng file riêng lẻ.
+### Thuat toan sinh du lieu (v3)
 
-**Thuật toán sinh dữ liệu:**  
-Generator dùng phương pháp **Cholesky / linear combination** để kiểm soát Pearson r:
-- Sinh hai biến chuẩn độc lập `x`, `z ~ N(0,1)`.
-- Tạo `y = r·x + √(1-r²)·z` — có tương quan đúng `r` với `x`.
-- Scale cả hai về `[1, max_weight]` và làm tròn thành số nguyên.
+**Gaussian Jitter:** Moi gia tri trong config la **gia tri neo (anchor)**, gia tri thuc te duoc lam nhieu quanh no:
+
+- `n_actual = N(n_anchor, 0.10 * n_anchor)` — clamp >= 2
+- `ratio_actual = N(ratio_anchor, 0.05 * ratio_anchor)` — clamp [0.01, 1.0]
+
+Dieu nay tao ra phan phoi Gauss tu nhien quanh moi gia tri cau hinh, giup du lieu test da dang hon.
+
+**Cholesky Method:** Kiem soat tuong quan Pearson:
+- Sinh `x`, `z ~ N(0,1)` doc lap.
+- Tao `y = r*x + sqrt(1-r²)*z`.
+- Scale ca hai ve `[1, max_weight]`.
+
+**Rejection Sampling:** Khi `target_pearson_r >= 0.9`:
+- Kiem tra tuong quan thuc te bang `scipy.stats.pearsonr`.
+- Neu sai lech > 0.03, loai bo va sinh lai (toi da 200 lan thu).
 
 ---
 
-## 3. Định dạng dữ liệu đầu ra (`data/raw/`)
+## 3. Dinh dang du lieu dau ra (`data/raw/`)
 
-Mỗi file đại diện cho một bài toán cụ thể, đặt tên theo quy ước:
+Ten file theo quy uoc:
 
 ```
-{scenario_name}_n{n}_wmax{max_weight}_cr{capacity_ratio}_pr{pearson_r}_{index}.json
+{scenario}_n{n_anchor}_wmax{max_weight}_cr{ratio_anchor}_pr{target_r}_{index}.json
 ```
 
-Ví dụ: `algorithmic_scaling_test_n100_wmax1000_cr0.5_pr0.95_03.json`
+Vi du: `benchmark_core_n100_wmax1000_cr0.5_pr0.95_03.json`
 
-Ví dụ nội dung JSON:
+Noi dung JSON:
 
 ```json
 {
-  "test_id": "benchmark_core_n10_wmax1000_cr0.5_pr0_01",
-  "capacity": 1772.5,
+  "test_id": "benchmark_core_n100_wmax1000_cr0.5_pr0.95_01",
+  "capacity": 23514.7,
   "metadata": {
-    "n": 10,
-    "capacity_ratio": 0.5,
-    "pearson_r": 0.147,
-    "density_cv": 0.635,
-    "target_pearson_r": 0.0,
-    "capacity_ratio_input": 0.5,
+    "n": 110,
+    "capacity_ratio": 0.5299,
+    "pearson_r": 0.9643,
+    "density_cv": 0.0964,
+    "n_anchor": 100,
+    "n_actual": 110,
+    "target_pearson_r": 0.95,
+    "capacity_ratio_anchor": 0.5,
+    "capacity_ratio_actual": 0.5299,
     "max_weight": 1000,
     "seed": 42,
-    "instance_seed": 4201
+    "instance_seed": 42009377
   },
   "items": [
-    {"id": 0, "weight": 180.0, "value": 794.0},
-    {"id": 1, "weight": 494.0, "value": 171.0}
+    {"id": 0, "weight": 180.0, "value": 794.0}
   ]
 }
 ```
 
 ---
 
-## 4. Kiểm tra chất lượng testcase (`quality.py`)
-
-Sau khi sinh dữ liệu, chạy module phân tích để kiểm tra chất lượng:
+## 4. Kiem tra chat luong testcase (`quality.py`)
 
 ```bash
 python data/quality.py
 ```
 
-Script sẽ in bảng thống kê tóm tắt ra terminal và lưu một **dashboard 9 biểu đồ** vào `results/quality/quality_dashboard.png`.
-Ngoài ra, module còn lưu:
-- `results/quality/metadata_uniformity.png`
-- `results/quality/metadata_distributions.png`
-- `results/quality/metadata_independence.png`
+Luu dashboard vao `results/quality/quality_dashboard.png`.
 
-Tham số CLI:
-
-| Tham số | Mặc định | Mô tả |
+| Tham so | Mac dinh | Mo ta |
 |---|---|---|
-| `--raw` | `data/raw/` | Thư mục chứa các file JSON đã sinh. |
-| `--output` | `results/quality/` | Thư mục lưu ảnh dashboard. |
+| `--raw` | `data/raw/` | Thu muc chua cac file JSON da sinh. |
+| `--output` | `results/quality/` | Thu muc luu anh dashboard. |
 
-**Danh sách biểu đồ trong dashboard:**
+**Dashboard 6 bieu do (Phase 2 — Gaussian Verification):**
 
-| # | Biểu đồ | Mục đích |
+| # | Bieu do | Muc dich |
 |---|---|---|
-| 1 | Scatter: Weight vs Value | Thấy hình dạng phân phối theo từng mức `target_r` |
-| 2 | Scatter: Target vs Actual Pearson r | Kiểm tra độ chính xác của generator |
-| 3 | Scatter: Target vs Actual capacity ratio | Kiểm tra tỷ lệ sức chứa |
-| 4 | KDE: Weight distribution | Phân phối khối lượng vật phẩm theo `target_r` |
-| 5 | KDE: Value distribution | Phân phối giá trị vật phẩm theo `target_r` |
-| 6 | KDE: Density (v/w) distribution | Phân phối mật độ giá trị theo `target_r` |
-| 7 | Box plot: density_cv theo (n, r) | Độ phân tán mật độ theo kích thước và tương quan |
-| 8 | Violin: Pearson r thực tế theo n | Xem r thực tế phân tán ra sao theo n |
-| 9 | Heatmap: Correlation metadata | Tương quan giữa các chỉ số metadata |
+| 1 | Histogram + Normal fit: n_actual | Chung minh n_actual tao phan phoi Gauss quanh n_anchor |
+| 2 | Histogram + Normal fit: ratio_actual | Chung minh ratio_actual tao Gauss quanh ratio_anchor |
+| 3 | Histogram + Normal fit: pearson_r | Chung minh pearson_r thuc te phan phoi quanh target |
+| 4 | Scatter: n_anchor vs n_actual | Nhin do trai (jitter spread) cua n |
+| 5 | Scatter: ratio_anchor vs ratio_actual | Nhin do trai cua capacity ratio |
+| 6 | Scatter: target_r vs actual_r (theo n) | Do chinh xac Pearson r, mau theo n |
 
-**Các ảnh kiểm tra metadata bổ sung:**
-- `metadata_uniformity.png`: bar chart + scatter tổng hợp để nhìn độ đều.
-- `metadata_distributions.png`: scatter 1D theo từng đại lượng (`n`, `capacity_ratio_input`, `target_pearson_r`, `max_weight`).
-- `metadata_independence.png`: heatmap Spearman giữa các metadata.
+Truc X cua cac histogram la **gia tri thuc te lien tuc**, truc Y la **mat do (density)**, kem duong Normal fit.
 
 ---
 
-## 5. Ý nghĩa các chỉ số trong `metadata`
+## 5. Y nghia cac chi so trong `metadata`
 
-**Chỉ số đặc trưng bài toán (tự tính từ dữ liệu):**
+**Chi so dac trung bai toan (tu tinh tu du lieu):**
 
-| Chỉ số | Ý nghĩa |
+| Chi so | Y nghia |
 |---|---|
-| `n` | Số lượng vật phẩm. Quyết định độ phức tạp O(n·W) của DP và O(2ⁿ) của brute-force. |
-| `capacity_ratio` | W / sum(w_i). Tiến về 0.5 → bài toán khó nhất; tiến về 0 hoặc 1 → dễ hơn. |
-| `pearson_r` | Hệ số tương quan Pearson thực tế giữa `weight` và `value`. Tiến về 1 → phá vỡ khả năng cắt nhánh của Branch & Bound. |
-| `density_cv` | CV = std(v/w) / mean(v/w). CV nhỏ → các vật phẩm "tốt ngang nhau" → Greedy dễ sai, Branch & Bound tốn thời gian hơn. |
+| `n` | So luong vat pham thuc te (= `n_actual`, sau Gaussian jitter). |
+| `capacity_ratio` | W / sum(w_i) thuc te (sau jitter). |
+| `pearson_r` | He so tuong quan Pearson thuc te giua `weight` va `value`. |
+| `density_cv` | CV = std(v/w) / mean(v/w). CV nho → Greedy de sai, B&B ton thoi gian. |
 
-**Tham số sinh dữ liệu (để truy vết):**
+**Tham so neo va truy vet:**
 
-| Chỉ số | Ý nghĩa |
+| Chi so | Y nghia |
 |---|---|
-| `target_pearson_r` | Giá trị Pearson r mục tiêu đã cấu hình trong config. |
-| `capacity_ratio_input` | Tỷ lệ capacity đầu vào từ config. |
-| `max_weight` | Giá trị khối lượng tối đa đầu vào. |
-| `seed` | Seed ngẫu nhiên đã dùng để sinh dữ liệu. |
-| `instance_seed` | Seed riêng cho từng testcase để tái tạo độc lập. |
+| `n_anchor` | Gia tri n goc tu config (truoc jitter). |
+| `n_actual` | Gia tri n thuc te (sau Gaussian jitter). |
+| `target_pearson_r` | Pearson r muc tieu tu config. |
+| `capacity_ratio_anchor` | Ratio goc tu config. |
+| `capacity_ratio_actual` | Ratio thuc te (sau jitter). |
+| `max_weight` | Khoi luong toi da dau vao. |
+| `seed` | Global seed. |
+| `instance_seed` | Seed rieng cho tung testcase (tai tao doc lap). |

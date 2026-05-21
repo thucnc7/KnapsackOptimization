@@ -1,35 +1,36 @@
-"""Build 02_analysis_and_plots.ipynb with improved visualizations."""
+"""Build 02_analysis_and_plots.ipynb — Phase 3 & 4.
+
+Phase 3: Scatter plots (time vs n, time vs ratio, time vs pearson_r)
+Phase 4: Automated curve fitting with shape detection on time vs n
+"""
 import json
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-def md(src): return {"cell_type":"markdown","metadata":{},"source":[src],"id":hex(abs(hash(src)))[2:10]}
-def code(src): return {"cell_type":"code","metadata":{},"source":[src],"outputs":[],"execution_count":None,"id":hex(abs(hash(src)))[2:10]}
+def md(src):
+    return {"cell_type":"markdown","metadata":{},"source":[src],
+            "id":hex(abs(hash(src)))[2:10]}
+
+def code(src):
+    return {"cell_type":"code","metadata":{},"source":[src],
+            "outputs":[],"execution_count":None,
+            "id":hex(abs(hash(src)))[2:10]}
 
 CELLS = []
 
-# ── Cell 0: title ─────────────────────────────────────────────────────────────
+# ── Title ─────────────────────────────────────────────────────────────────────
 CELLS.append(md("""\
-# Knapsack Benchmark — Analysis & Visualizations
+# Knapsack Benchmark — Post-Benchmark Analysis
 
-Notebook phân tích kết quả benchmark sau khi chạy các thuật toán.
-Biểu đồ được lưu tự động vào `results/plots/` (300 DPI).
-
-**Sections:**
-1. Setup & Load CSV
-2. Runtime vs N (log scale + curve fit)
-3. Grouped bar: mean runtime per algorithm
-4. Memory profiling (stress)
-5. Pearson r vs Branch & Bound runtime
-6. Heatmap: runtime by (n, algorithm)
-7. Knapsack hierarchy (Fractional / Unbounded / 0-1)\
+**Phase 3:** Scatter plots of `time_sec` vs each attribute per algorithm.
+**Phase 4:** Automated curve fitting (shape detection) on `time_sec` vs `n`.\
 """))
 
-# ── Cell 1: setup ─────────────────────────────────────────────────────────────
+# ── Cell: Setup ───────────────────────────────────────────────────────────────
 CELLS.append(code("""\
 from __future__ import annotations
-import os
+import os, warnings
 from pathlib import Path
 
 import numpy as np
@@ -40,39 +41,33 @@ import seaborn as sns
 
 try:
     from scipy.optimize import curve_fit
+    from scipy.stats import pearsonr
+    HAS_SCIPY = True
 except ImportError:
-    curve_fit = None
+    HAS_SCIPY = False
 
-# ── Design system ────────────────────────────────────────────────────────────
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+# ── Design ───────────────────────────────────────────────────────────────────
 FIG_BG    = "#0f0f1a"
 AX_BG     = "#16213e"
 GRID_CLR  = "#2a2a4a"
 TEXT_CLR  = "#dde1f0"
 MUTED_CLR = "#8890b0"
-PALETTE   = ["#7b68ee", "#00d4aa", "#ff6b6b", "#ffd166", "#06d6a0",
+PAL_LIST  = ["#7b68ee", "#00d4aa", "#ff6b6b", "#ffd166", "#06d6a0",
              "#ef476f", "#118ab2", "#fca311", "#e9c46a"]
 
 plt.rcParams.update({
-    "figure.facecolor": FIG_BG,
-    "axes.facecolor":   AX_BG,
-    "axes.edgecolor":   GRID_CLR,
-    "axes.labelcolor":  MUTED_CLR,
-    "axes.grid":        True,
-    "grid.color":       GRID_CLR,
-    "grid.linewidth":   0.5,
-    "grid.linestyle":   "--",
-    "text.color":       TEXT_CLR,
-    "xtick.color":      MUTED_CLR,
-    "ytick.color":      MUTED_CLR,
-    "legend.framealpha": 0.85,
-    "legend.edgecolor": GRID_CLR,
-    "legend.facecolor": AX_BG,
-    "legend.labelcolor": TEXT_CLR,
-    "font.size": 10,
-    "axes.titlesize": 11,
-    "axes.titleweight": "bold",
-    "figure.dpi": 120,
-    "savefig.dpi": 300,
+    "figure.facecolor": FIG_BG, "axes.facecolor": AX_BG,
+    "axes.edgecolor": GRID_CLR, "axes.labelcolor": MUTED_CLR,
+    "axes.grid": True, "grid.color": GRID_CLR,
+    "grid.linewidth": 0.5, "grid.linestyle": "--",
+    "text.color": TEXT_CLR,
+    "xtick.color": MUTED_CLR, "ytick.color": MUTED_CLR,
+    "legend.framealpha": 0.85, "legend.edgecolor": GRID_CLR,
+    "legend.facecolor": AX_BG, "legend.labelcolor": TEXT_CLR,
+    "font.size": 10, "axes.titlesize": 11, "axes.titleweight": "bold",
+    "figure.dpi": 120, "savefig.dpi": 300,
 })
 
 def style_ax(ax, title="", xlabel="", ylabel=""):
@@ -81,8 +76,8 @@ def style_ax(ax, title="", xlabel="", ylabel=""):
     ax.set_ylabel(ylabel, color=MUTED_CLR)
     ax.set_axisbelow(True)
 
-def algo_palette(algos):
-    return {a: PALETTE[i % len(PALETTE)] for i, a in enumerate(sorted(algos))}
+def algo_pal(algos):
+    return {a: PAL_LIST[i % len(PAL_LIST)] for i, a in enumerate(sorted(algos))}
 
 def resolve_root():
     cwd = Path.cwd().resolve()
@@ -91,8 +86,8 @@ def resolve_root():
             return p
     return cwd
 
-ROOT   = resolve_root()
-PLOTS  = ROOT / "results" / "plots"
+ROOT  = resolve_root()
+PLOTS = ROOT / "results" / "plots"
 PLOTS.mkdir(parents=True, exist_ok=True)
 
 def save(fig, name):
@@ -102,8 +97,8 @@ def save(fig, name):
 print("Root:", ROOT)\
 """))
 
-# ── Cell 2: load CSV ──────────────────────────────────────────────────────────
-CELLS.append(md("## 1 · Load & Preprocess CSV"))
+# ── Cell: Load CSV ────────────────────────────────────────────────────────────
+CELLS.append(md("## 1 · Load & Preprocess"))
 CELLS.append(code("""\
 CSV_PATH = ROOT / "results" / "csv" / "benchmark_results_timeout5.csv"
 if not CSV_PATH.exists():
@@ -111,270 +106,184 @@ if not CSV_PATH.exists():
 
 df = pd.read_csv(CSV_PATH)
 
-# Numeric coercion
-for col in ["time_sec", "peak_memory_mb", "optimal_value",
-            "n", "capacity", "pearson_corr", "density_variance"]:
+for col in ["time_sec","peak_memory_mb","optimal_value",
+            "n","capacity","capacity_to_weight_ratio",
+            "pearson_corr","density_variance"]:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-TIMEOUT_SEC = int(os.getenv("BENCHMARK_TIMEOUT_SEC", "60"))
+TIMEOUT = int(os.getenv("BENCHMARK_TIMEOUT_SEC", "60"))
 df["is_timeout"] = df["status"].str.upper().eq("TIMEOUT")
-df["is_oom"]     = df["status"].str.upper().eq("OOM")
+df["is_error"]   = df["status"].str.upper().eq("ERROR")
 df["is_success"] = df["status"].str.upper().eq("SUCCESS")
+df["time_plot"]  = df["time_sec"].copy()
+df.loc[df["is_timeout"], "time_plot"] = TIMEOUT
 
-# Capped timeout time for plotting
-df["time_plot"] = df["time_sec"].copy()
-df.loc[df["is_timeout"], "time_plot"] = TIMEOUT_SEC
+ALGOS = sorted(df["algorithm"].unique())
+PAL   = algo_pal(ALGOS)
 
-# OOM memory → NaN (don't plot)
-df.loc[df["is_timeout"] | df["status"].str.upper().eq("ERROR"), "peak_memory_mb"] = np.nan
-
-ALGOS   = sorted(df["algorithm"].unique())
-PAL     = algo_palette(ALGOS)
-
-print(f"Rows: {len(df)} | Algorithms: {len(ALGOS)} | "
-      f"Timeouts: {df['is_timeout'].sum()} | OOM: {df['is_oom'].sum()}")
-display(df[["algorithm","n","time_sec","peak_memory_mb","status"]].head(10))\
+print(f"Rows: {len(df)}  |  Algorithms: {ALGOS}")
+print(f"Timeouts: {df['is_timeout'].sum()}  |  Errors: {df['is_error'].sum()}")
+display(df[["algorithm","n","time_sec","status"]].head(8))\
 """))
 
-# ── Cell 3: runtime vs N ──────────────────────────────────────────────────────
-CELLS.append(md("## 2 · Runtime vs N (log scale + curve fit)"))
+# ── Cell: Phase 3 — Scatter per algorithm ─────────────────────────────────────
+CELLS.append(md("""\
+## 2 · Scatter Plots: time vs (n, capacity_ratio, pearson_r)
+
+3 separate scatter plots per algorithm.
+**Excludes TIMEOUT and ERROR** to avoid skewing.
+Y-axis uses log scale when variance is large.\
+"""))
+
 CELLS.append(code("""\
-df_ok = df[df["is_success"] & df["time_sec"].gt(0)].copy()
+df_ok = df[df["is_success"]].copy()
 
-# Near-uncorrelated subset for fair comparison
-if "pearson_corr" in df_ok.columns:
-    df_ok = df_ok[df_ok["pearson_corr"].abs() <= 0.15]
-
-fig, ax = plt.subplots(figsize=(10, 5.5), facecolor=FIG_BG)
+ATTRS = [
+    ("n",                          "n (items)"),
+    ("capacity_to_weight_ratio",   "capacity_ratio"),
+    ("pearson_corr",               "pearson_r (weight-value)"),
+]
 
 for algo in ALGOS:
-    sub = df_ok[df_ok["algorithm"] == algo].sort_values("n")
+    sub = df_ok[df_ok["algorithm"] == algo]
     if sub.empty:
+        print(f"  {algo}: no SUCCESS rows, skip")
         continue
-    grp = sub.groupby("n")["time_sec"].median().reset_index()
-    ax.plot(grp["n"], grp["time_sec"], "o-",
-            color=PAL[algo], lw=2, ms=5, label=algo, zorder=3)
 
-# Mark timeouts
-timeout_sub = df[df["is_timeout"]]
-if not timeout_sub.empty:
-    ax.scatter(timeout_sub["n"], timeout_sub["time_plot"],
-               marker="x", s=60, color="#ff4444", lw=1.5,
-               label="TIMEOUT", zorder=5)
+    fig, axes = plt.subplots(1, 3, figsize=(18, 4.5), facecolor=FIG_BG)
+    fig.suptitle(f"Algorithm: {algo}",
+                 color=TEXT_CLR, fontsize=13, fontweight="bold", y=1.02)
 
-ax.set_yscale("log")
-ax.yaxis.set_major_formatter(mticker.FuncFormatter(
-    lambda x, _: f"{x:.0e}" if x < 0.001 else f"{x:.3g}s"
-))
-ax.legend(loc="upper left", fontsize=8)
-style_ax(ax, "Median Runtime vs N  (uncorrelated, log scale)", "n (items)", "time (sec)")
-fig.tight_layout()
-save(fig, "runtime_vs_n.png")
-plt.show()\
-"""))
-
-# ── Cell 4: grouped bar ───────────────────────────────────────────────────────
-CELLS.append(md("## 3 · Mean Runtime per Algorithm (grouped by N)"))
-CELLS.append(code("""\
-grp = (df[df["is_success"]]
-       .groupby(["algorithm", "n"])["time_sec"]
-       .mean()
-       .reset_index()
-       .rename(columns={"time_sec": "mean_time"}))
-
-n_vals = sorted(grp["n"].unique())
-fig, axes = plt.subplots(1, len(n_vals), figsize=(4.5 * len(n_vals), 5),
-                          sharey=False, facecolor=FIG_BG)
-if len(n_vals) == 1:
-    axes = [axes]
-
-for ax, nv in zip(axes, n_vals):
-    sub = grp[grp["n"] == nv].sort_values("mean_time", ascending=True)
-    colors = [PAL[a] for a in sub["algorithm"]]
-    bars = ax.barh(sub["algorithm"], sub["mean_time"], color=colors,
-                   edgecolor=AX_BG, linewidth=0.4, height=0.6)
-    ax.bar_label(bars, fmt="%.4g s", padding=3,
-                 color=TEXT_CLR, fontsize=7.5)
-    ax.set_xscale("log")
-    style_ax(ax, f"n = {nv}", "time (sec, log)")
-    ax.invert_yaxis()
-
-fig.suptitle("Mean Runtime by Algorithm", color=TEXT_CLR,
-             fontsize=13, fontweight="bold", y=1.01)
-fig.tight_layout()
-save(fig, "mean_runtime_bar.png")
-plt.show()\
-"""))
-
-# ── Cell 5: memory ────────────────────────────────────────────────────────────
-CELLS.append(md("## 4 · Memory Profiling"))
-CELLS.append(code("""\
-df_mem = df[df["peak_memory_mb"].notna()].copy()
-
-if df_mem.empty:
-    print("No memory data.")
-else:
-    # Prefer stress scenario
-    stress = df_mem[df_mem["test_id"].astype(str).str.contains("stress", case=False)]
-    df_plot = stress if not stress.empty else df_mem
-
-    grp_mem = (df_plot
-               .groupby(["algorithm", "n"])["peak_memory_mb"]
-               .mean()
-               .reset_index())
-
-    fig, ax = plt.subplots(figsize=(10, 5), facecolor=FIG_BG)
-    for algo in ALGOS:
-        sub = grp_mem[grp_mem["algorithm"] == algo].sort_values("n")
-        if sub.empty:
+    for ax, (col, xlabel) in zip(axes, ATTRS):
+        if col not in sub.columns or sub[col].isna().all():
+            ax.text(0.5, 0.5, f"No '{col}' data", ha="center",
+                    va="center", color=TEXT_CLR, transform=ax.transAxes)
+            style_ax(ax, f"time vs {xlabel}", xlabel, "time_sec")
             continue
-        ax.plot(sub["n"], sub["peak_memory_mb"], "s--",
-                color=PAL[algo], lw=1.8, ms=6, label=algo)
 
-    ax.set_yscale("log")
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(
-        lambda x, _: f"{x:.0f} MB"
-    ))
-    ax.legend(fontsize=8)
-    style_ax(ax, "Peak Memory vs N", "n (items)", "Peak Memory (MB, log)")
+        ax.scatter(sub[col], sub["time_sec"],
+                   s=22, alpha=0.65, color=PAL[algo],
+                   linewidths=0.3, edgecolors=AX_BG, zorder=3)
+
+        # Log scale if variance > 2 orders of magnitude
+        tmin, tmax = sub["time_sec"].min(), sub["time_sec"].max()
+        if tmax > 0 and tmin > 0 and (tmax / tmin) > 100:
+            ax.set_yscale("log")
+            ax.yaxis.set_major_formatter(
+                mticker.FuncFormatter(lambda v, _: f"{v:.2g}s")
+            )
+
+        style_ax(ax, f"time vs {xlabel}", xlabel, "time_sec")
+
     fig.tight_layout()
-    save(fig, "memory_vs_n.png")
+    save(fig, f"scatter_{algo}.png")
     plt.show()\
 """))
 
-# ── Cell 6: pearson r vs BnB ──────────────────────────────────────────────────
-CELLS.append(md("## 5 · Pearson r vs Branch & Bound Runtime"))
-CELLS.append(code("""\
-bnb_mask = df["algorithm"].str.contains("BranchAndBound|Branch.*Bound", na=False, case=False)
-bnb = df[bnb_mask & df["status"].str.upper().isin(["SUCCESS","TIMEOUT"])].copy()
+# ── Cell: Phase 4 — Curve fitting ─────────────────────────────────────────────
+CELLS.append(md("""\
+## 3 · Curve Fitting: time vs n (shape detection)
 
-if bnb.empty:
-    print("No B&B data found.")
-else:
-    n_vals_bnb = sorted(bnb["n"].unique())
-    cmap = plt.colormaps["cool"].resampled(len(n_vals_bnb))
-
-    fig, ax = plt.subplots(figsize=(8, 5), facecolor=FIG_BG)
-    for i, nv in enumerate(n_vals_bnb):
-        sub = bnb[bnb["n"] == nv]
-        ax.scatter(sub["pearson_corr"], sub["time_plot"],
-                   color=cmap(i), s=30, alpha=0.7,
-                   linewidths=0.3, edgecolors=AX_BG, label=f"n={nv}", zorder=3)
-
-    # OLS line across all n
-    sub_ok = bnb[bnb["is_success"] & bnb["pearson_corr"].notna()]
-    if len(sub_ok) >= 3:
-        m, b = np.polyfit(sub_ok["pearson_corr"], sub_ok["time_plot"], 1)
-        xs = np.linspace(sub_ok["pearson_corr"].min(), sub_ok["pearson_corr"].max(), 100)
-        ax.plot(xs, m*xs+b, "--", color="#ffcc44", lw=1.5, label="OLS trend")
-
-    ax.legend(fontsize=8)
-    style_ax(ax, "Pearson r vs B&B Runtime  (high r breaks pruning)",
-             "Pearson r (weight-value)", "time (sec)")
-    fig.tight_layout()
-    save(fig, "bnb_pearson_runtime.png")
-    plt.show()\
+For each algorithm, fit **Linear, Quadratic, Cubic, Exponential** candidates
+to the median runtime per n.  Pick the best R² and annotate the plot.\
 """))
 
-# ── Cell 7: heatmap runtime ───────────────────────────────────────────────────
-CELLS.append(md("## 6 · Runtime Heatmap (Algorithm × N)"))
 CELLS.append(code("""\
-pivot = (df[df["is_success"]]
-         .groupby(["algorithm", "n"])["time_sec"]
-         .median()
-         .unstack("n"))
-
-if pivot.empty:
-    print("Not enough data for heatmap.")
+if not HAS_SCIPY:
+    print("scipy not available; skip curve fitting.")
 else:
-    fig, ax = plt.subplots(figsize=(max(6, len(pivot.columns)*1.4),
-                                    max(4, len(pivot)*0.8)),
-                            facecolor=FIG_BG)
-    log_pivot = np.log10(pivot.replace(0, np.nan))
+    # ── Candidate functions ──────────────────────────────────────────────
+    def f_linear(x, a, b):
+        return a * x + b
 
-    im = sns.heatmap(
-        log_pivot, ax=ax,
-        cmap="plasma", annot=pivot.applymap(lambda x: f"{x:.3g}"),
-        fmt="", annot_kws={"size": 8, "color": TEXT_CLR},
-        linewidths=0.4, linecolor=AX_BG,
-        cbar_kws={"label": "log₁₀(time sec)", "shrink": 0.8},
-    )
-    ax.set_xlabel("n (items)", color=MUTED_CLR)
-    ax.set_ylabel("Algorithm", color=MUTED_CLR)
-    ax.set_title("Median Runtime Heatmap  (values in seconds)",
-                 color=TEXT_CLR, pad=10, fontweight="bold")
-    ax.tick_params(colors=MUTED_CLR)
-    im.collections[0].colorbar.ax.tick_params(colors=MUTED_CLR, labelsize=8)
-    im.collections[0].colorbar.ax.yaxis.label.set_color(MUTED_CLR)
-    fig.tight_layout()
-    save(fig, "runtime_heatmap.png")
-    plt.show()\
-"""))
+    def f_quad(x, a, b, c):
+        return a * x**2 + b * x + c
 
-# ── Cell 8: hierarchy ────────────────────────────────────────────────────────
-CELLS.append(md("## 7 · Knapsack Hierarchy (Fractional / Unbounded / 0-1)"))
-CELLS.append(code("""\
-if "knapsack_type" not in df.columns:
-    print("Column 'knapsack_type' not in CSV; skipping.")
-else:
-    ok = df[df["is_success"]].copy()
-    types_needed = {"fractional", "unbounded", "01"}
-    by_tid = ok.groupby("test_id")["knapsack_type"].apply(set)
-    valid_tids = by_tid[by_tid.apply(lambda s: types_needed <= s)].index
+    def f_cubic(x, a, b, c, d):
+        return a * x**3 + b * x**2 + c * x + d
 
-    if len(valid_tids):
-        aligned = ok[ok["test_id"].isin(valid_tids)]
-        group_cols = ["test_id", "knapsack_type"]
-    else:
-        ok["_key"] = list(zip(ok["n"], ok["capacity"]))
-        by_key = ok.groupby("_key")["knapsack_type"].apply(set)
-        valid_keys = by_key[by_key.apply(lambda s: types_needed <= s)].index
-        aligned = ok[ok["_key"].isin(valid_keys)]
-        group_cols = ["_key", "knapsack_type"]
+    def f_exp(x, a, b):
+        return a * np.power(2.0, b * x)
 
-    if aligned.empty:
-        print("No matched triples; skipping.")
-    else:
-        agg = (aligned.groupby(group_cols)
-                      .agg(val=("optimal_value","max"), t=("time_sec","min"))
-                      .reset_index())
-        summary = (agg.groupby("knapsack_type")
-                      .agg(mean_val=("val","mean"), mean_t=("t","mean"))
-                      .reindex(["fractional","unbounded","01"]))
+    CANDIDATES = [
+        ("Linear  O(N)",   f_linear, (1e-6, 0),              2),
+        ("Quadratic O(N^2)", f_quad, (1e-9, 1e-6, 0),        3),
+        ("Cubic O(N^3)",   f_cubic,  (1e-12, 1e-9, 1e-6, 0), 4),
+        ("Exponential O(2^N)", f_exp, (1e-6, 0.05),           2),
+    ]
 
-        TYPE_CLR = {"fractional":"#00d4aa","unbounded":"#7b68ee","01":"#ff6b6b"}
-        x = np.arange(len(summary))
-        fig, ax1 = plt.subplots(figsize=(7, 4.5), facecolor=FIG_BG)
-        ax2 = ax1.twinx()
-        ax2.set_facecolor(AX_BG)
+    def _r_squared(y_true, y_pred):
+        ss_res = np.sum((y_true - y_pred) ** 2)
+        ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+        return 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
-        colors = [TYPE_CLR.get(t, PALETTE[0]) for t in summary.index]
-        bars = ax1.bar(x, summary["mean_val"], color=colors, alpha=0.75,
-                       edgecolor=AX_BG, width=0.5)
-        ax2.plot(x, summary["mean_t"], "o--", color="#ffcc44",
-                 lw=2, ms=8, label="Mean time")
+    df_fit = df[df["is_success"] & df["time_sec"].gt(0)].copy()
 
-        ax1.bar_label(bars, fmt="%.1f", padding=4, color=TEXT_CLR, fontsize=8)
-        ax1.set_xticks(x)
-        ax1.set_xticklabels(summary.index, color=TEXT_CLR)
-        ax1.set_ylabel("Mean Optimal Value", color=MUTED_CLR)
-        ax2.set_ylabel("Mean Time (sec)", color="#ffcc44")
-        ax2.tick_params(colors="#ffcc44")
-        ax2.legend(loc="upper right", fontsize=8)
-        ax1.set_title("Knapsack Hierarchy: Solution Quality vs Runtime",
-                      color=TEXT_CLR, pad=10, fontweight="bold")
-        ax1.grid(color=GRID_CLR, linewidth=0.5, linestyle="--", axis="y")
-        ax1.set_axisbelow(True)
+    for algo in ALGOS:
+        sub = df_fit[df_fit["algorithm"] == algo]
+        if sub.empty or sub["n"].nunique() < 3:
+            continue
+
+        medians = sub.groupby("n")["time_sec"].median().reset_index()
+        xd = medians["n"].values.astype(float)
+        yd = medians["time_sec"].values.astype(float)
+
+        fig, ax = plt.subplots(figsize=(9, 5), facecolor=FIG_BG)
+
+        # Raw data scatter (all points)
+        ax.scatter(sub["n"], sub["time_sec"],
+                   s=14, alpha=0.30, color=PAL[algo], linewidths=0, label="raw")
+        # Median dots
+        ax.scatter(xd, yd, s=50, color=PAL[algo], edgecolors="white",
+                   linewidths=0.8, zorder=4, label="median")
+
+        best_name, best_r2, best_ys = "None", -1e9, None
+
+        for name, func, p0, n_params in CANDIDATES:
+            if len(xd) < n_params:
+                continue
+            try:
+                popt, _ = curve_fit(func, xd, yd, p0=p0, maxfev=20000)
+                x_grid = np.linspace(xd.min(), xd.max(), 300)
+                y_pred = func(x_grid, *popt)
+                y_pred_pts = func(xd, *popt)
+                r2 = _r_squared(yd, y_pred_pts)
+
+                if r2 > best_r2:
+                    best_r2 = r2
+                    best_name = name
+                    best_ys = (x_grid, y_pred)
+            except Exception:
+                pass
+
+        # Draw best fit
+        if best_ys is not None:
+            ax.plot(best_ys[0], best_ys[1], "--", color=MUTED_CLR, lw=2,
+                    label=f"Best: {best_name}", zorder=5)
+
+        # Annotate
+        box_text = f"Best fit: {best_name}\\nR² = {best_r2:.4f}"
+        ax.text(0.02, 0.96, box_text,
+                transform=ax.transAxes, fontsize=10, va="top",
+                color=TEXT_CLR, fontweight="bold",
+                bbox=dict(facecolor=AX_BG, edgecolor=GRID_CLR,
+                          alpha=0.9, boxstyle="round,pad=0.4"))
+
+        tmin, tmax = yd.min(), yd.max()
+        if tmax > 0 and tmin > 0 and (tmax / tmin) > 50:
+            ax.set_yscale("log")
+
+        ax.legend(fontsize=8, loc="lower right")
+        style_ax(ax, f"Curve Fit: {algo}", "n (items)", "time_sec (median)")
         fig.tight_layout()
-        save(fig, "knapsack_hierarchy.png")
+        save(fig, f"curvefit_{algo}.png")
         plt.show()\
 """))
 
-# ── Write notebook ─────────────────────────────────────────────────────────────
+# ── Write notebook ────────────────────────────────────────────────────────────
 nb = {
-    "nbformat": 4,
-    "nbformat_minor": 5,
+    "nbformat": 4, "nbformat_minor": 5,
     "metadata": {
         "kernelspec": {"display_name":"Python 3","language":"python","name":"python3"},
         "language_info": {"name":"python","version":"3.11"},
