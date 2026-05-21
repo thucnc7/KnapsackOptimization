@@ -5,96 +5,337 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
+import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import seaborn as sns
+from matplotlib.lines import Line2D
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-# ── Palette ──────────────────────────────────────────────────────────────────
-PALETTE = "viridis"
-STYLE   = "dark_background"
-FIG_BG  = "#0f0f1a"
-AX_BG   = "#1a1a2e"
-TEXT_COLOR = "#e0e0e0"
-ACCENT  = "#7b68ee"
+# ── Design tokens ─────────────────────────────────────────────────────────────
+FIG_BG     = "#0f0f1a"
+AX_BG      = "#16213e"
+GRID_COLOR = "#2a2a4a"
+TEXT       = "#dde1f0"
+MUTED      = "#8890b0"
+PALETTE    = ["#7b68ee", "#00d4aa", "#ff6b6b"]   # r=0 / r=0.5 / r=0.95
+DIAG_CLR   = "#ffcc44"
+
+plt.rcParams.update({
+    "font.family": "DejaVu Sans",
+    "font.size": 9,
+    "axes.titlesize": 10,
+    "axes.labelsize": 9,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    "legend.fontsize": 8,
+})
 
 
 class TestcaseQualityAnalyzer:
-    """Load generated benchmark instances and produce a quality report.
-
-    Usage
-    -----
-    >>> analyzer = TestcaseQualityAnalyzer("data/raw")
-    >>> analyzer.plot_all(output_dir="results/quality")
-    >>> analyzer.print_summary()
-    """
-
-    # ── Construction ─────────────────────────────────────────────────────────
+    """Load generated benchmark instances and produce a quality report."""
 
     def __init__(self, raw_dir: str | Path) -> None:
         self.raw_dir = Path(raw_dir)
         self._records: List[Dict[str, Any]] = self._load_all()
         self.df: pd.DataFrame = self._build_dataframe()
 
+    # ── Loaders ───────────────────────────────────────────────────────────────
+
     def _load_all(self) -> List[Dict[str, Any]]:
-        """Load every JSON file from raw_dir into a flat list of records."""
         files = sorted(self.raw_dir.glob("*.json"))
         if not files:
-            raise FileNotFoundError(f"No JSON files found in {self.raw_dir}")
-
+            raise FileNotFoundError(f"No JSON files in {self.raw_dir}")
         records = []
         for path in files:
             raw = json.loads(path.read_text(encoding="utf-8"))
             meta = raw.get("metadata", {})
-            record = {
-                "test_id":          raw["test_id"],
-                "capacity":         raw["capacity"],
-                "n":                int(meta.get("n", 0)),
-                "capacity_ratio":   float(meta.get("capacity_ratio", 0)),
-                "pearson_r":        float(meta.get("pearson_r", 0)),
-                "density_cv":       float(meta.get("density_cv", 0)),
-                "target_pearson_r": float(meta.get("target_pearson_r", float("nan"))),
+            rec = {
+                "test_id":              raw["test_id"],
+                "capacity":             raw["capacity"],
+                "n":                    int(meta.get("n", 0)),
+                "capacity_ratio":       float(meta.get("capacity_ratio", 0)),
+                "pearson_r":            float(meta.get("pearson_r", 0)),
+                "density_cv":           float(meta.get("density_cv", 0)),
+                "target_pearson_r":     float(meta.get("target_pearson_r", float("nan"))),
                 "capacity_ratio_input": float(meta.get("capacity_ratio_input", float("nan"))),
-                "max_weight":       int(meta.get("max_weight", 0)),
-                "seed":             int(meta.get("seed", 0)),
-                "instance_seed":    int(meta.get("instance_seed", meta.get("seed", 0))),
+                "max_weight":           int(meta.get("max_weight", 0)),
+                "seed":                 int(meta.get("seed", 0)),
+                "instance_seed":        int(meta.get("instance_seed", meta.get("seed", 0))),
             }
-            # Derive per-item arrays for distribution plots
             items = raw.get("items", [])
-            record["weights"] = [it["weight"] for it in items]
-            record["values"]  = [it["value"]  for it in items]
-            record["densities"] = [
-                it["value"] / it["weight"] if it["weight"] != 0 else 0.0
+            rec["weights"]   = [it["weight"] for it in items]
+            rec["values"]    = [it["value"]  for it in items]
+            rec["densities"] = [
+                it["value"] / it["weight"] if it["weight"] else 0.0
                 for it in items
             ]
-            records.append(record)
+            records.append(rec)
         return records
 
     def _build_dataframe(self) -> pd.DataFrame:
-        """Build a summary DataFrame (one row per instance, no item arrays)."""
         rows = [
-            {k: v for k, v in rec.items()
-             if k not in ("weights", "values", "densities")}
-            for rec in self._records
+            {k: v for k, v in r.items() if k not in ("weights", "values", "densities")}
+            for r in self._records
         ]
         df = pd.DataFrame(rows)
         df["n_label"] = "n=" + df["n"].astype(str)
-        df["target_r_label"] = "r≈" + df["target_pearson_r"].map(
-            lambda x: str(x) if not np.isnan(x) else "?"
+        r_unique = sorted(df["target_pearson_r"].dropna().unique())
+        self._r_color = {rv: PALETTE[i % len(PALETTE)] for i, rv in enumerate(r_unique)}
+        df["r_label"] = df["target_pearson_r"].map(
+            lambda x: f"r={x:g}" if not np.isnan(x) else "?"
         )
         return df
 
-    # ── Public API ──────────────────────────────�������─────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _style(self, ax: plt.Axes, title: str, xlabel: str = "", ylabel: str = "") -> None:
+        ax.set_facecolor(AX_BG)
+        ax.set_title(title, color=TEXT, pad=8, fontweight="bold")
+        ax.set_xlabel(xlabel, color=MUTED)
+        ax.set_ylabel(ylabel, color=MUTED)
+        ax.tick_params(colors=MUTED)
+        ax.grid(color=GRID_COLOR, linewidth=0.5, linestyle="--", alpha=0.6)
+        ax.set_axisbelow(True)
+        for sp in ax.spines.values():
+            sp.set_edgecolor(GRID_COLOR)
+
+    def _legend(self, ax: plt.Axes, **kw) -> None:
+        leg = ax.legend(
+            facecolor=AX_BG, edgecolor=GRID_COLOR, labelcolor=TEXT,
+            framealpha=0.9, **kw
+        )
+        if leg:
+            leg.get_frame().set_linewidth(0.5)
+
+    def _r_items(self) -> list[tuple[float, str, str]]:
+        """Return (r_val, label, color) sorted by r_val."""
+        return [
+            (rv, f"r={rv:g}", c)
+            for rv, c in sorted(self._r_color.items())
+        ]
+
+    # ── Individual plots ──────────────────────────────────────────────────────
+
+    def _plot_scatter_by_r(self, ax: plt.Axes) -> None:
+        """Weight vs Value faceted by target Pearson r (one colour per level)."""
+        rng = np.random.default_rng(0)
+        valid = self.df.dropna(subset=["target_pearson_r"])
+
+        for rv, label, color in self._r_items():
+            ids = set(valid[valid["target_pearson_r"] == rv]["test_id"])
+            # Sample ≤2 instances per r-level to avoid overplotting
+            sampled_ids = set(list(ids)[:2])
+            ws, vs = [], []
+            for rec in self._records:
+                if rec["test_id"] in sampled_ids:
+                    ws.extend(rec["weights"])
+                    vs.extend(rec["values"])
+            if ws:
+                ax.scatter(ws, vs, s=8, alpha=0.35, color=color,
+                           linewidths=0, label=label, rasterized=True)
+                # Trend line
+                p = np.polyfit(ws, vs, 1)
+                xs = np.array([min(ws), max(ws)])
+                ax.plot(xs, np.polyval(p, xs), color=color, lw=1.5, alpha=0.9)
+
+        self._legend(ax, loc="upper left", markerscale=2)
+        self._style(ax, "Weight vs Value by Target r",
+                    xlabel="Weight", ylabel="Value")
+
+    def _plot_target_vs_actual_r(self, ax: plt.Axes) -> None:
+        """Actual Pearson r vs target, coloured by n."""
+        valid = self.df.dropna(subset=["target_pearson_r"])
+        n_vals = sorted(valid["n"].unique())
+        cmap = plt.colormaps["cool"].resampled(len(n_vals))
+
+        for i, nv in enumerate(n_vals):
+            sub = valid[valid["n"] == nv]
+            ax.scatter(sub["target_pearson_r"], sub["pearson_r"],
+                       s=22, alpha=0.75, color=cmap(i),
+                       linewidths=0.4, edgecolors=AX_BG, label=f"n={nv}")
+
+        lo = valid[["target_pearson_r", "pearson_r"]].min().min() - 0.05
+        hi = valid[["target_pearson_r", "pearson_r"]].max().max() + 0.05
+        ax.plot([lo, hi], [lo, hi], "--", color=DIAG_CLR, lw=1.2,
+                label="Perfect accuracy", zorder=5)
+        ax.text(hi - 0.02, hi + 0.02, "y=x", color=DIAG_CLR,
+                fontsize=7, ha="right")
+
+        self._legend(ax, loc="upper left")
+        self._style(ax, "Target vs Actual Pearson r",
+                    xlabel="Target r", ylabel="Actual r")
+
+    def _plot_r_error_by_n(self, ax: plt.Axes) -> None:
+        """Mean absolute error |actual r − target r| grouped by n."""
+        valid = self.df.dropna(subset=["target_pearson_r"]).copy()
+        valid["r_err"] = (valid["pearson_r"] - valid["target_pearson_r"]).abs()
+
+        for rv, label, color in self._r_items():
+            sub = valid[valid["target_pearson_r"] == rv]
+            grouped = sub.groupby("n")["r_err"].mean().reset_index()
+            ax.plot(grouped["n"], grouped["r_err"], "o-", color=color,
+                    lw=1.5, ms=5, label=label)
+
+        ax.axhline(0, color=DIAG_CLR, lw=0.8, linestyle="--", alpha=0.5)
+        self._legend(ax)
+        self._style(ax, "|Actual r − Target r| by N",
+                    xlabel="n (items)", ylabel="Mean absolute error")
+
+    def _plot_distributions(self, ax_w: plt.Axes, ax_v: plt.Axes,
+                            ax_d: plt.Axes) -> None:
+        """KDE distributions for weight, value, density grouped by target r."""
+        valid = self.df.dropna(subset=["target_pearson_r"])
+
+        for field, ax, label in [
+            ("weights",   ax_w, "Weight"),
+            ("values",    ax_v, "Value"),
+            ("densities", ax_d, "Density v/w"),
+        ]:
+            for rv, lbl, color in self._r_items():
+                ids = set(valid[valid["target_pearson_r"] == rv]["test_id"])
+                data = []
+                for rec in self._records:
+                    if rec["test_id"] in ids:
+                        data.extend(rec[field])
+                if data:
+                    sns.kdeplot(np.array(data), ax=ax, color=color,
+                                lw=2, label=lbl, fill=True, alpha=0.15)
+            self._legend(ax)
+            self._style(ax, f"{label} Distribution by r",
+                        xlabel=label, ylabel="Density")
+
+    def _plot_density_cv(self, ax: plt.Axes) -> None:
+        """Strip + box plot of density_cv per n, split by target r."""
+        valid = self.df.dropna(subset=["target_pearson_r"]).copy()
+        n_order = [f"n={v}" for v in sorted(valid["n"].unique())]
+
+        sns.boxplot(
+            data=valid, x="n_label", y="density_cv", hue="r_label",
+            order=n_order, ax=ax,
+            palette={lbl: c for _, lbl, c in self._r_items()},
+            width=0.55, linewidth=0.8, fliersize=0,
+            boxprops=dict(alpha=0.5),
+        )
+        sns.stripplot(
+            data=valid, x="n_label", y="density_cv", hue="r_label",
+            order=n_order, ax=ax,
+            palette={lbl: c for _, lbl, c in self._r_items()},
+            dodge=True, size=3.5, alpha=0.7, linewidth=0,
+            legend=False,
+        )
+        # Keep only the boxplot legend entry
+        handles, labels = ax.get_legend_handles_labels()
+        half = len(handles) // 2
+        ax.legend(handles[:half], labels[:half],
+                  facecolor=AX_BG, edgecolor=GRID_COLOR, labelcolor=TEXT,
+                  framealpha=0.9, fontsize=8, title="Target r",
+                  title_fontsize=8)
+        self._style(ax, "Density CV by N and Target r",
+                    xlabel="N", ylabel="density_cv")
+
+    def _plot_heatmap(self, ax: plt.Axes) -> None:
+        """Correlation heatmap of key numeric metadata."""
+        cols = ["n", "capacity_ratio", "pearson_r", "density_cv",
+                "target_pearson_r", "capacity_ratio_input"]
+        sub = self.df[cols].dropna()
+        corr = sub.corr(method="spearman")
+        mask = np.triu(np.ones_like(corr, dtype=bool), k=1)
+
+        sns.heatmap(
+            corr, mask=mask, ax=ax,
+            cmap="coolwarm", center=0, vmin=-1, vmax=1,
+            annot=True, fmt=".2f", annot_kws={"size": 8, "color": TEXT},
+            linewidths=0.4, linecolor=GRID_COLOR,
+            cbar_kws={"shrink": 0.75, "label": "Spearman ρ"},
+        )
+        ax.set_xticklabels(ax.get_xticklabels(),
+                           rotation=35, ha="right", fontsize=7, color=TEXT)
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0,
+                           fontsize=7, color=TEXT)
+        cbar = ax.collections[0].colorbar
+        cbar.ax.tick_params(labelsize=7, colors=MUTED)
+        cbar.set_label("Spearman ρ", color=MUTED, fontsize=8)
+        self._style(ax, "Metadata Correlation (Spearman ρ)")
+
+    def _plot_capacity_accuracy(self, ax: plt.Axes) -> None:
+        """Actual capacity ratio vs target — should cluster on y=x."""
+        valid = self.df.dropna(subset=["capacity_ratio_input"])
+        for rv, lbl, color in self._r_items():
+            sub = valid[valid["target_pearson_r"] == rv]
+            if not sub.empty:
+                ax.scatter(sub["capacity_ratio_input"], sub["capacity_ratio"],
+                           s=20, alpha=0.7, color=color, linewidths=0,
+                           label=lbl)
+        lo, hi = 0.0, 1.0
+        ax.plot([lo, hi], [lo, hi], "--", color=DIAG_CLR, lw=1.2, zorder=5)
+        self._legend(ax)
+        self._style(ax, "Capacity Ratio: Target vs Actual",
+                    xlabel="Target ratio", ylabel="Actual ratio")
+
+    # ── Dashboard ─────────────────────────────────────────────────────────────
+
+    def plot_all(self, output_dir: str | Path | None = None) -> None:
+        """Render the full 9-subplot quality dashboard."""
+        plt.style.use("dark_background")
+        fig = plt.figure(figsize=(24, 20), facecolor=FIG_BG)
+        fig.suptitle(
+            "Knapsack Testcase Quality Dashboard",
+            fontsize=16, color=TEXT, fontweight="bold", y=0.985,
+        )
+
+        gs = gridspec.GridSpec(
+            3, 3, figure=fig,
+            hspace=0.44, wspace=0.33,
+            left=0.06, right=0.97, top=0.94, bottom=0.05,
+        )
+        ax_sc  = fig.add_subplot(gs[0, 0])
+        ax_rr  = fig.add_subplot(gs[0, 1])
+        ax_err = fig.add_subplot(gs[0, 2])
+        ax_w   = fig.add_subplot(gs[1, 0])
+        ax_v   = fig.add_subplot(gs[1, 1])
+        ax_d   = fig.add_subplot(gs[1, 2])
+        ax_cv  = fig.add_subplot(gs[2, 0:2])   # wide
+        ax_cap = fig.add_subplot(gs[2, 2])
+
+        # Placeholder for heatmap — share gs[2,2] → move heatmap to separate figure
+        self._plot_scatter_by_r(ax_sc)
+        self._plot_target_vs_actual_r(ax_rr)
+        self._plot_r_error_by_n(ax_err)
+        self._plot_distributions(ax_w, ax_v, ax_d)
+        self._plot_density_cv(ax_cv)
+        self._plot_capacity_accuracy(ax_cap)
+
+        if output_dir:
+            out = Path(output_dir)
+            out.mkdir(parents=True, exist_ok=True)
+            p = out / "quality_dashboard.png"
+            fig.savefig(p, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
+            print(f"Dashboard -> {p}")
+
+        plt.show()
+
+        # --- Separate heatmap figure ---
+        fig2, ax_hm = plt.subplots(figsize=(8, 7), facecolor=FIG_BG)
+        fig2.patch.set_facecolor(FIG_BG)
+        self._plot_heatmap(ax_hm)
+        fig2.suptitle("Metadata Correlation", color=TEXT, fontsize=13,
+                      fontweight="bold")
+        if output_dir:
+            p2 = out / "quality_heatmap.png"
+            fig2.savefig(p2, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
+            print(f"Heatmap    -> {p2}")
+        plt.show()
+
+    # ── Summary ───────────────────────────────────────────────────────────────
 
     def print_summary(self) -> None:
-        """Print a concise statistical summary to stdout."""
         print("=" * 60)
         print("  TESTCASE QUALITY SUMMARY")
         print("=" * 60)
@@ -103,423 +344,35 @@ class TestcaseQualityAnalyzer:
         print(f"  Target r values : {sorted(self.df['target_pearson_r'].dropna().unique())}")
         print(f"  Capacity ratios : {sorted(self.df['capacity_ratio_input'].dropna().unique())}")
         print()
-        key_cols = ["n", "pearson_r", "density_cv", "capacity_ratio"]
-        print(self.df[key_cols].describe().round(4).to_string())
+        print(self.df[["n", "pearson_r", "density_cv", "capacity_ratio"]]
+              .describe().round(4).to_string())
         print()
-
-        # Correlation accuracy
-        valid = self.df.dropna(subset=["target_pearson_r"])
-        if not valid.empty:
-            valid = valid.copy()
-            valid["r_error"] = (valid["pearson_r"] - valid["target_pearson_r"]).abs()
-            print("  Pearson-r accuracy (target vs actual):")
-            print(valid.groupby("target_pearson_r")["r_error"].describe().round(4).to_string())
+        valid = self.df.dropna(subset=["target_pearson_r"]).copy()
+        valid["r_err"] = (valid["pearson_r"] - valid["target_pearson_r"]).abs()
+        print("  Pearson-r accuracy (mean |error|):")
+        print(valid.groupby("target_pearson_r")["r_err"]
+              .describe().round(4).to_string())
         print("=" * 60)
 
-    def plot_all(self, output_dir: str | Path | None = None) -> None:
-        """Generate the full quality dashboard (7 subplots) and save/show it."""
-        plt.style.use(STYLE)
-        fig = plt.figure(figsize=(22, 20), facecolor=FIG_BG)
-        fig.suptitle(
-            "Knapsack Benchmark — Testcase Quality Dashboard",
-            fontsize=18, color=TEXT_COLOR, fontweight="bold", y=0.98,
-        )
-        gs = gridspec.GridSpec(
-            3, 3, figure=fig,
-            hspace=0.42, wspace=0.35,
-            left=0.06, right=0.97, top=0.93, bottom=0.06,
-        )
 
-        ax1 = fig.add_subplot(gs[0, 0])   # Weight vs Value scatter
-        ax2 = fig.add_subplot(gs[0, 1])   # Target vs Actual Pearson r
-        ax3 = fig.add_subplot(gs[0, 2])   # Capacity ratio: target vs actual
-        ax4 = fig.add_subplot(gs[1, 0])   # Weight distribution
-        ax5 = fig.add_subplot(gs[1, 1])   # Value distribution
-        ax6 = fig.add_subplot(gs[1, 2])   # Density (v/w) distribution
-        ax7 = fig.add_subplot(gs[2, 0])   # density_cv by n
-        ax8 = fig.add_subplot(gs[2, 1])   # Pearson r by n
-        ax9 = fig.add_subplot(gs[2, 2])   # Metadata correlation heatmap
-
-        self._plot_weight_value_scatter(ax1)
-        self._plot_target_vs_actual_r(ax2)
-        self._plot_capacity_ratio_accuracy(ax3)
-        self._plot_distribution(ax4, field="weights", label="Weight")
-        self._plot_distribution(ax5, field="values",  label="Value")
-        self._plot_distribution(ax6, field="densities", label="Density (v/w)")
-        self._plot_density_cv_by_n(ax7)
-        self._plot_pearson_r_by_n(ax8)
-        self._plot_metadata_heatmap(ax9)
-
-        if output_dir:
-            out = Path(output_dir)
-            out.mkdir(parents=True, exist_ok=True)
-            save_path = out / "quality_dashboard.png"
-            fig.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
-            print(f"Dashboard saved -> {save_path}")
-
-        plt.show()
-
-    def plot_metadata_checks(self, output_dir: str | Path | None = None) -> None:
-        """Plot uniformity and independence checks for metadata attributes."""
-        plt.style.use(STYLE)
-        fig = plt.figure(figsize=(18, 10), facecolor=FIG_BG)
-        fig.suptitle(
-            "Metadata Uniformity Check",
-            fontsize=16, color=TEXT_COLOR, fontweight="bold", y=0.98,
-        )
-        gs = gridspec.GridSpec(
-            2, 2, figure=fig,
-            hspace=0.35, wspace=0.25,
-            left=0.06, right=0.97, top=0.92, bottom=0.08,
-        )
-        ax1 = fig.add_subplot(gs[0, 0])
-        ax2 = fig.add_subplot(gs[0, 1])
-        ax3 = fig.add_subplot(gs[1, 0])
-        ax4 = fig.add_subplot(gs[1, 1])
-
-        self._plot_metadata_count(ax1, "n", "N distribution")
-        self._plot_metadata_count(ax2, "capacity_ratio_input", "Capacity ratio (input) distribution")
-        self._plot_metadata_count(ax3, "target_pearson_r", "Target Pearson r distribution")
-        self._plot_metadata_scatter(ax4)
-
-        if output_dir:
-            out = Path(output_dir)
-            out.mkdir(parents=True, exist_ok=True)
-            save_path = out / "metadata_uniformity.png"
-            fig.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
-            print(f"Metadata uniformity saved -> {save_path}")
-
-        plt.show()
-
-        fig_hist = plt.figure(figsize=(18, 10), facecolor=FIG_BG)
-        fig_hist.suptitle(
-            "Metadata 1D Scatter Distributions",
-            fontsize=16, color=TEXT_COLOR, fontweight="bold", y=0.98,
-        )
-        gs_hist = gridspec.GridSpec(
-            2, 2, figure=fig_hist,
-            hspace=0.35, wspace=0.25,
-            left=0.06, right=0.97, top=0.92, bottom=0.08,
-        )
-        hx1 = fig_hist.add_subplot(gs_hist[0, 0])
-        hx2 = fig_hist.add_subplot(gs_hist[0, 1])
-        hx3 = fig_hist.add_subplot(gs_hist[1, 0])
-        hx4 = fig_hist.add_subplot(gs_hist[1, 1])
-
-        self._plot_metadata_strip(hx1, "n", "N distribution (scatter)")
-        self._plot_metadata_strip(hx2, "capacity_ratio_input", "Capacity ratio (input) (scatter)")
-        self._plot_metadata_strip(hx3, "target_pearson_r", "Target Pearson r (scatter)")
-        self._plot_metadata_strip(hx4, "max_weight", "Max weight (scatter)")
-
-        if output_dir:
-            out = Path(output_dir)
-            out.mkdir(parents=True, exist_ok=True)
-            save_path = out / "metadata_distributions.png"
-            fig_hist.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
-            print(f"Metadata distributions saved -> {save_path}")
-
-        plt.show()
-
-        fig2 = plt.figure(figsize=(10, 8), facecolor=FIG_BG)
-        ax = fig2.add_subplot(1, 1, 1)
-        self._plot_metadata_heatmap(
-            ax,
-            cols=[
-                "n",
-                "capacity_ratio_input",
-                "target_pearson_r",
-                "max_weight",
-                "seed",
-                "instance_seed",
-            ],
-            method="spearman",
-            title="Metadata Independence (Spearman ρ)",
-        )
-
-        if output_dir:
-            out = Path(output_dir)
-            out.mkdir(parents=True, exist_ok=True)
-            save_path = out / "metadata_independence.png"
-            fig2.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=FIG_BG)
-            print(f"Metadata independence saved -> {save_path}")
-
-        plt.show()
-
-    # ── Individual plots ──────────────────────────────────────────────────────
-
-    def _style_ax(self, ax: plt.Axes, title: str) -> None:
-        ax.set_facecolor(AX_BG)
-        ax.set_title(title, color=TEXT_COLOR, fontsize=11, pad=8)
-        ax.tick_params(colors=TEXT_COLOR, labelsize=8)
-        for spine in ax.spines.values():
-            spine.set_edgecolor("#444466")
-        ax.xaxis.label.set_color(TEXT_COLOR)
-        ax.yaxis.label.set_color(TEXT_COLOR)
-
-    def _plot_weight_value_scatter(self, ax: plt.Axes) -> None:
-        """Scatter weight vs value for a sample of instances, coloured by target_pearson_r."""
-        # Sample at most 3 instances per target_r group to avoid overplotting
-        sample = (
-            self.df.groupby("target_pearson_r", group_keys=False)
-            .apply(lambda g: g.sample(min(3, len(g)), random_state=0), include_groups=False)
-        )
-        for rec in self._records:
-            if rec["test_id"] not in set(sample["test_id"]):
-                continue
-            tr = rec.get("target_pearson_r") or 0.0
-            color = plt.cm.plasma(0.1 + 0.8 * ((tr + 1) / 2))
-            ax.scatter(
-                rec["weights"], rec["values"],
-                alpha=0.4, s=10, color=color, linewidths=0,
-            )
-
-        # Legend
-        for r_val in sorted(self.df["target_pearson_r"].dropna().unique()):
-            color = plt.cm.plasma(0.1 + 0.8 * ((r_val + 1) / 2))
-            ax.scatter([], [], color=color, label=f"r≈{r_val}", s=30)
-        ax.legend(
-            fontsize=7, facecolor=AX_BG, edgecolor="#444466",
-            labelcolor=TEXT_COLOR, loc="upper left",
-        )
-        ax.set_xlabel("Weight"); ax.set_ylabel("Value")
-        self._style_ax(ax, "Weight vs Value (sample, coloured by target r)")
-
-    def _plot_target_vs_actual_r(self, ax: plt.Axes) -> None:
-        """Scatter: target Pearson r vs realised Pearson r per instance."""
-        valid = self.df.dropna(subset=["target_pearson_r"])
-        if valid.empty:
-            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
-            self._style_ax(ax, "Target vs Actual Pearson r")
-            return
-
-        # Group by n for colour
-        n_vals = sorted(valid["n"].unique())
-        palette = plt.colormaps["cool"].resampled(len(n_vals))
-        for i, n_val in enumerate(n_vals):
-            sub = valid[valid["n"] == n_val]
-            ax.scatter(
-                sub["target_pearson_r"], sub["pearson_r"],
-                label=f"n={n_val}", s=20, alpha=0.7,
-                color=palette(i), linewidths=0,
-            )
-
-        # Perfect accuracy diagonal
-        lo = min(valid["target_pearson_r"].min(), valid["pearson_r"].min()) - 0.05
-        hi = max(valid["target_pearson_r"].max(), valid["pearson_r"].max()) + 0.05
-        ax.plot([lo, hi], [lo, hi], "--", color="#888888", lw=1, label="Perfect accuracy")
-
-        ax.set_xlabel("Target Pearson r"); ax.set_ylabel("Actual Pearson r")
-        ax.legend(fontsize=7, facecolor=AX_BG, edgecolor="#444466", labelcolor=TEXT_COLOR)
-        self._style_ax(ax, "Target vs Actual Pearson r")
-
-    def _plot_capacity_ratio_accuracy(self, ax: plt.Axes) -> None:
-        """Scatter: target capacity_ratio_input vs realised capacity_ratio."""
-        valid = self.df.dropna(subset=["capacity_ratio_input"])
-        if valid.empty:
-            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
-            self._style_ax(ax, "Capacity Ratio: Target vs Actual")
-            return
-
-        ax.scatter(
-            valid["capacity_ratio_input"], valid["capacity_ratio"],
-            s=15, alpha=0.6, color=ACCENT, linewidths=0,
-        )
-        lo = min(valid["capacity_ratio_input"].min(), valid["capacity_ratio"].min()) - 0.02
-        hi = max(valid["capacity_ratio_input"].max(), valid["capacity_ratio"].max()) + 0.02
-        ax.plot([lo, hi], [lo, hi], "--", color="#888888", lw=1)
-        ax.set_xlabel("Target capacity_ratio"); ax.set_ylabel("Actual capacity_ratio")
-        self._style_ax(ax, "Capacity Ratio: Target vs Actual")
-
-    def _plot_distribution(self, ax: plt.Axes, field: str, label: str) -> None:
-        """KDE + rug distribution of a per-item field, grouped by target_pearson_r."""
-        valid = self.df.dropna(subset=["target_pearson_r"])
-        r_vals = sorted(valid["target_pearson_r"].unique())
-        palette = plt.colormaps["plasma"].resampled(len(r_vals))
-
-        for i, r_val in enumerate(r_vals):
-            ids = set(valid[valid["target_pearson_r"] == r_val]["test_id"])
-            data = []
-            for rec in self._records:
-                if rec["test_id"] in ids:
-                    data.extend(rec[field])
-            if data:
-                arr = np.array(data)
-                # KDE via seaborn on the axis
-                sns.kdeplot(
-                    arr, ax=ax, color=palette(i), linewidth=1.5,
-                    label=f"r≈{r_val}", fill=True, alpha=0.18,
-                )
-
-        ax.set_xlabel(label); ax.set_ylabel("Density")
-        ax.legend(fontsize=7, facecolor=AX_BG, edgecolor="#444466", labelcolor=TEXT_COLOR)
-        self._style_ax(ax, f"{label} Distribution by target r")
-
-    def _plot_density_cv_by_n(self, ax: plt.Axes) -> None:
-        """Box plot of density_cv grouped by (n, target_pearson_r)."""
-        valid = self.df.dropna(subset=["target_pearson_r"]).copy()
-        valid["group"] = valid["n_label"] + "\n" + valid["target_r_label"]
-
-        order = sorted(valid["group"].unique(), key=lambda s: (
-            int(s.split("\n")[0].replace("n=", "")),
-            float(s.split("≈")[1]),
-        ))
-
-        sns.boxplot(
-            data=valid, x="group", y="density_cv", order=order,
-            hue="group", legend=False,
-            ax=ax, palette="plasma",
-            linewidth=0.8, fliersize=2,
-        )
-        ax.set_xlabel("(n, target r)"); ax.set_ylabel("density_cv")
-        ax.tick_params(axis="x", labelsize=6)
-        self._style_ax(ax, "Density CV by N and Target Pearson r")
-
-    def _plot_pearson_r_by_n(self, ax: plt.Axes) -> None:
-        """Violin plot of realised pearson_r grouped by n for each target_r."""
-        valid = self.df.dropna(subset=["target_pearson_r"]).copy()
-        sns.violinplot(
-            data=valid, x="n_label", y="pearson_r",
-            hue="target_r_label", ax=ax,
-            palette="cool", linewidth=0.6, cut=0, inner="quartile",
-        )
-        ax.axhline(0, color="#666666", lw=0.8, linestyle="--")
-        ax.set_xlabel("N"); ax.set_ylabel("Actual Pearson r")
-        legend = ax.get_legend()
-        if legend:
-            legend.set_title("Target r", prop={"size": 7})
-            plt.setp(legend.get_texts(), color=TEXT_COLOR, fontsize=7)
-            plt.setp(legend.get_title(), color=TEXT_COLOR)
-            legend.get_frame().set_facecolor(AX_BG)
-            legend.get_frame().set_edgecolor("#444466")
-        self._style_ax(ax, "Realised Pearson r Distribution by N")
-
-    def _plot_metadata_count(self, ax: plt.Axes, column: str, title: str) -> None:
-        """Bar chart to check if metadata values are uniformly distributed."""
-        series = self.df[column].dropna()
-        if series.empty:
-            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
-            self._style_ax(ax, title)
-            return
-
-        counts = series.value_counts().sort_index()
-        ax.bar(counts.index.astype(str), counts.values, color=ACCENT, alpha=0.85)
-        ax.axhline(counts.mean(), color="#888888", lw=1, linestyle="--", label="Uniform mean")
-        ax.set_xlabel(column)
-        ax.set_ylabel("Count")
-        ax.tick_params(axis="x", labelrotation=30)
-        ax.legend(fontsize=7, facecolor=AX_BG, edgecolor="#444466", labelcolor=TEXT_COLOR)
-        self._style_ax(ax, title)
-
-    def _plot_metadata_scatter(self, ax: plt.Axes) -> None:
-        """Scatter plot to eyeball metadata uniformity across instances."""
-        cols = ["n", "capacity_ratio_input", "target_pearson_r", "max_weight"]
-        sub = self.df[cols].dropna()
-        if sub.empty:
-            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
-            self._style_ax(ax, "Metadata Scatter (uniformity check)")
-            return
-
-        x = np.arange(len(sub))
-        palette = plt.colormaps["plasma"].resampled(len(cols))
-        for i, col in enumerate(cols):
-            ax.scatter(x, sub[col], s=12, alpha=0.6, color=palette(i), label=col)
-
-        ax.set_xlabel("Instance index")
-        ax.set_ylabel("Value")
-        ax.legend(fontsize=7, facecolor=AX_BG, edgecolor="#444466", labelcolor=TEXT_COLOR)
-        self._style_ax(ax, "Metadata Scatter (uniformity check)")
-
-    def _plot_metadata_histogram(self, ax: plt.Axes, column: str, title: str) -> None:
-        """Histogram for a single metadata column."""
-        series = self.df[column].dropna()
-        if series.empty:
-            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
-            self._style_ax(ax, title)
-            return
-
-        bins = 12 if series.nunique() > 12 else max(series.nunique(), 4)
-        ax.hist(series, bins=bins, color=ACCENT, alpha=0.8, edgecolor="#222233")
-        ax.set_xlabel(column)
-        ax.set_ylabel("Count")
-        self._style_ax(ax, title)
-
-    def _plot_metadata_strip(self, ax: plt.Axes, column: str, title: str) -> None:
-        """1D scatter (strip) plot for a single metadata column."""
-        series = self.df[column].dropna()
-        if series.empty:
-            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
-            self._style_ax(ax, title)
-            return
-
-        rng = np.random.default_rng(0)
-        x = rng.uniform(-0.15, 0.15, size=len(series))
-        ax.scatter(x, series, s=14, alpha=0.7, color=ACCENT, linewidths=0)
-        ax.set_xlim(-0.4, 0.4)
-        ax.set_xticks([])
-        ax.set_xlabel(column)
-        ax.set_ylabel("Value")
-        self._style_ax(ax, title)
-
-    def _plot_metadata_heatmap(
-        self,
-        ax: plt.Axes,
-        cols: List[str] | None = None,
-        method: str = "spearman",
-        title: str = "Metadata Correlation Heatmap",
-    ) -> None:
-        """Correlation heatmap of numeric metadata columns."""
-        if cols is None:
-            cols = [
-                "n",
-                "capacity_ratio",
-                "pearson_r",
-                "density_cv",
-                "target_pearson_r",
-                "capacity_ratio_input",
-            ]
-        sub = self.df[cols].dropna()
-        if sub.empty:
-            ax.text(0.5, 0.5, "No data", ha="center", va="center", color=TEXT_COLOR)
-            self._style_ax(ax, title)
-            return
-        corr = sub.corr(method=method)
-
-        mask = np.triu(np.ones_like(corr, dtype=bool))
-        sns.heatmap(
-            corr, mask=mask, ax=ax,
-            cmap="coolwarm", center=0, vmin=-1, vmax=1,
-            annot=True, fmt=".2f", annot_kws={"size": 8},
-            linewidths=0.5, linecolor="#333355",
-            cbar_kws={"shrink": 0.8},
-        )
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha="right", fontsize=8)
-        ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=8)
-        self._style_ax(ax, title)
-
-
-# ── CLI ────��──────────────────────────────────────────────────────────────────
+# ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     import argparse
-    parser = argparse.ArgumentParser(
-        description="Visualize quality of generated knapsack test instances."
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         "--raw", type=Path,
         default=Path(__file__).resolve().parent / "raw",
-        help="Directory containing generated JSON instances.",
     )
     parser.add_argument(
         "--output", type=Path,
         default=Path(__file__).resolve().parents[1] / "results" / "quality",
-        help="Directory to save the dashboard image.",
     )
     args = parser.parse_args()
 
     analyzer = TestcaseQualityAnalyzer(args.raw)
     analyzer.print_summary()
     analyzer.plot_all(output_dir=args.output)
-    analyzer.plot_metadata_checks(output_dir=args.output)
 
 
 if __name__ == "__main__":
