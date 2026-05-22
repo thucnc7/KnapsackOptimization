@@ -1,5 +1,8 @@
 import math
 from typing import List, Tuple, Dict, Any, Optional
+
+import numpy as np
+
 from src.models import KnapsackInstance, Item
 from src.algorithms.base import FractionalKnapsackMixin
 from src.algorithms.simplex.base_simplex import BaseSimplexSolver
@@ -27,189 +30,112 @@ class SimplexTableau:
         self.n: int = len(c)
         self.m: int = len(b)
 
-        # Build individual rows of the constraint equations
-        self.tableau: List[List[float]] = []
+        # Build numpy tableau (m+1 rows × n+m+1 cols)
+        total_cols = self.n + self.m + 1
+        tableau = np.zeros((self.m + 1, total_cols), dtype=float)
         for i in range(self.m):
-            row = []
-            # Decision variables coefficients
-            row.extend(A[i])
-            # Slack variables coefficients (identity matrix)
-            slacks = [0.0] * self.m
-            slacks[i] = 1.0
-            row.extend(slacks)
-            # RHS value
-            row.append(b[i])
-            self.tableau.append(row)
+            tableau[i, 0:self.n] = np.asarray(A[i], dtype=float)
+            tableau[i, self.n + i] = 1.0
+            tableau[i, -1] = b[i]
+        tableau[-1, 0:self.n] = -np.asarray(c, dtype=float)
+        self.tableau = tableau
 
-        # Build the objective row (z - sum(c_j * x_j) = 0)
-        obj_row = []
-        obj_row.extend([-val for val in c])
-        obj_row.extend([0.0] * self.m)
-        obj_row.append(0.0)  # Initial objective value is 0.0
-        self.tableau.append(obj_row)
-
-        # Basis stores the index of the basic variable for each constraint row.
-        # Initially, the basic variables are the slack variables (indices n to n+m-1).
+        # Basis: initial basic variables are the slack vars (indices n .. n+m-1)
         self.basis: List[int] = [self.n + i for i in range(self.m)]
 
     def pivot(self, row: int, col: int):
-        """
-        Performs a pivoting operation on the specified cell (row, col).
-        Updates all other rows and updates the basis.
-        Performs natural row operations on all columns and applies precision cleanup.
-        """
-        pivot_val = self.tableau[row][col]
-        
-        # 1. Normalize the pivot row
-        self.tableau[row] = [val / pivot_val for val in self.tableau[row]]
-
-        # 2. Eliminate entries in other rows
-        for r in range(self.m + 1):
-            if r != row:
-                factor = self.tableau[r][col]
-                for c in range(len(self.tableau[r])):
-                    self.tableau[r][c] -= factor * self.tableau[row][c]
-
-        # 3. Apply standard floating-point cleanups to prevent float precision drift
-        for r in range(len(self.tableau)):
-            for c in range(len(self.tableau[r])):
-                if abs(self.tableau[r][c]) < 1e-12:
-                    self.tableau[r][c] = 0.0
-                elif abs(self.tableau[r][c] - 1.0) < 1e-12:
-                    self.tableau[r][c] = 1.0
-
-        # 4. Update the basic variable index for this row
+        """Vectorized pivot: divide pivot row, subtract multiples from others, update basis."""
+        pivot_val = self.tableau[row, col]
+        self.tableau[row] = self.tableau[row] / pivot_val
+        factors = self.tableau[:, col].copy()
+        factors[row] = 0.0
+        self.tableau -= np.outer(factors, self.tableau[row])
+        self.tableau[row, col] = 1.0
+        self.tableau[:row, col] = 0.0
+        self.tableau[row + 1:, col] = 0.0
         self.basis[row] = col
 
-    def solve_primal(self, max_iterations: int = 1000) -> str:
-        """
-        Solves the LP relaxation using the Primal Simplex algorithm.
-        Requires primal feasibility (b >= 0).
-        """
+    def solve_primal(self, max_iterations: int = 50000) -> str:
+        """Vectorized Primal Simplex (requires primal feasibility b >= 0)."""
         eps = 1e-9
         for _ in range(max_iterations):
-            # Find entering variable (most negative coefficient in objective row)
-            entering_col = -1
-            min_val = -eps
-            for c in range(self.n + self.m):
-                if self.tableau[self.m][c] < min_val:
-                    min_val = self.tableau[self.m][c]
-                    entering_col = c
+            obj = self.tableau[self.m, 0:self.n + self.m]
+            entering_col = int(np.argmin(obj))
+            if obj[entering_col] >= -eps:
+                return "optimal"
 
-            if entering_col == -1:
-                return "optimal"  # No negative coefficients in objective row
-
-            # Find leaving variable (Minimum Ratio Test)
-            leaving_row = -1
-            min_ratio = float('inf')
-            for r in range(self.m):
-                val = self.tableau[r][entering_col]
-                if val > eps:
-                    ratio = self.tableau[r][-1] / val
-                    if ratio < min_ratio:
-                        min_ratio = ratio
-                        leaving_row = r
-
-            if leaving_row == -1:
-                return "unbounded"  # LP objective is unbounded
+            column = self.tableau[0:self.m, entering_col]
+            rhs = self.tableau[0:self.m, -1]
+            mask = column > eps
+            if not mask.any():
+                return "unbounded"
+            ratios = np.where(mask, rhs / np.where(mask, column, 1.0), np.inf)
+            leaving_row = int(np.argmin(ratios))
 
             self.pivot(leaving_row, entering_col)
-
         return "max_iterations"
 
-    def solve_dual(self, max_iterations: int = 1000) -> str:
-        """
-        Solves the LP using the Dual Simplex algorithm.
-        Assumes dual feasibility (objective row non-negative for non-basic cols).
-        Corrects primal infeasibility (negative RHS values).
-        """
+    def solve_dual(self, max_iterations: int = 50000) -> str:
+        """Vectorized Dual Simplex (requires dual feasibility)."""
         eps = 1e-9
         for _ in range(max_iterations):
-            # Find leaving row (most negative RHS value)
-            leaving_row = -1
-            min_rhs = -eps
-            for r in range(self.m):
-                if self.tableau[r][-1] < min_rhs:
-                    min_rhs = self.tableau[r][-1]
-                    leaving_row = r
+            rhs_col = self.tableau[0:self.m, -1]
+            leaving_row = int(np.argmin(rhs_col))
+            if rhs_col[leaving_row] >= -eps:
+                return "optimal"
 
-            if leaving_row == -1:
-                return "optimal"  # All RHS >= 0, primal feasible!
-
-            # Find entering column (Dual ratio test)
-            entering_col = -1
-            min_ratio = float('inf')
-            for c in range(self.n + self.m):
-                val = self.tableau[leaving_row][c]
-                if val < -eps:
-                    # Ratio: objective row value / absolute of constraint row value
-                    ratio = self.tableau[self.m][c] / -val
-                    if ratio < min_ratio:
-                        min_ratio = ratio
-                        entering_col = c
-
-            if entering_col == -1:
-                return "infeasible"  # Primal LP is infeasible
+            pivot_row = self.tableau[leaving_row, 0:self.n + self.m]
+            obj_row = self.tableau[self.m, 0:self.n + self.m]
+            mask = pivot_row < -eps
+            if not mask.any():
+                return "infeasible"
+            ratios = np.where(mask, obj_row / np.where(mask, -pivot_row, 1.0), np.inf)
+            entering_col = int(np.argmin(ratios))
 
             self.pivot(leaving_row, entering_col)
-
         return "max_iterations"
 
     def add_constraint(self, coeff: List[float], rhs: float):
-        """
-        Adds a new inequality constraint (cut) to the active tableau.
-        coeff: coefficients for all existing columns (length self.n + self.m)
-        rhs: right-hand side limit of the new inequality
-        """
+        """Add a new inequality (cut) to the tableau."""
         new_slack_col = self.n + self.m
 
-        # Insert 0.0 at the new slack column position for all existing rows
-        for r in range(self.m + 1):
-            self.tableau[r].insert(new_slack_col, 0.0)
+        # Insert a zero column at new_slack_col for all existing rows
+        zero_col = np.zeros((self.tableau.shape[0], 1), dtype=float)
+        self.tableau = np.hstack([
+            self.tableau[:, :new_slack_col],
+            zero_col,
+            self.tableau[:, new_slack_col:],
+        ])
 
-        # Build the new constraint row:
-        # Includes original coefficients, 0s for previous slacks, 1.0 for new slack, and the RHS
-        new_row = []
-        new_row.extend(coeff)
-        new_row.append(1.0)
-        new_row.append(rhs)
+        # Build new row: coeff | 1.0 (new slack) | rhs
+        total_cols = self.tableau.shape[1]
+        new_row = np.zeros(total_cols, dtype=float)
+        new_row[:len(coeff)] = np.asarray(coeff, dtype=float)
+        new_row[new_slack_col] = 1.0
+        new_row[-1] = rhs
 
-        # Canonicalize the new row against existing basic variables
+        # Canonicalize against current basic variables
         for r in range(self.m):
             basic_col = self.basis[r]
             factor = new_row[basic_col]
             if abs(factor) > 1e-12:
-                for c in range(len(new_row)):
-                    new_row[c] -= factor * self.tableau[r][c]
-                    
-        # Apply standard floating-point cleanup
-        for c in range(len(new_row)):
-            if abs(new_row[c]) < 1e-12:
-                new_row[c] = 0.0
+                new_row -= factor * self.tableau[r]
 
-        # Insert the row just above the objective row
-        self.tableau.insert(self.m, new_row)
+        # Insert above the objective row
+        self.tableau = np.vstack([self.tableau[:self.m], new_row, self.tableau[self.m:]])
         self.m += 1
-
-        # Add the new slack variable to the basis
         self.basis.append(new_slack_col)
 
     def get_solution(self) -> List[float]:
-        """
-        Extracts current values of the decision variables.
-        """
         sol = [0.0] * self.n
         for r in range(self.m):
             var_idx = self.basis[r]
             if var_idx < self.n:
-                sol[var_idx] = self.tableau[r][-1]
+                sol[var_idx] = float(self.tableau[r, -1])
         return sol
 
     def get_objective_value(self) -> float:
-        """
-        Extracts the objective function value.
-        """
-        return self.tableau[self.m][-1]
+        return float(self.tableau[self.m, -1])
 
 
 class DualSimplexSolver(FractionalKnapsackMixin, BaseSimplexSolver):
@@ -252,20 +178,16 @@ class DualSimplexSolver(FractionalKnapsackMixin, BaseSimplexSolver):
             if status != "optimal":
                 return 0.0, [] # Problem is mathematically infeasible
                 
-            # Phase II: Restore original objective and Canonicalize
-            self.tableau.tableau[-1] = [-val for val in c] + [0.0] * self.tableau.m + [0.0]
-            
+            # Phase II: Restore original objective and canonicalize
+            total_cols = self.tableau.tableau.shape[1]
+            new_obj = np.zeros(total_cols, dtype=float)
+            new_obj[:self.tableau.n] = -np.asarray(c, dtype=float)
+            self.tableau.tableau[-1] = new_obj
             for r in range(self.tableau.m):
                 basic_col = self.tableau.basis[r]
-                factor = self.tableau.tableau[-1][basic_col]
+                factor = self.tableau.tableau[-1, basic_col]
                 if abs(factor) > 1e-12:
-                    for col in range(len(self.tableau.tableau[-1])):
-                        self.tableau.tableau[-1][col] -= factor * self.tableau.tableau[r][col]
-                        
-            # Clean up precision
-            for col in range(len(self.tableau.tableau[-1])):
-                if abs(self.tableau.tableau[-1][col]) < 1e-12:
-                    self.tableau.tableau[-1][col] = 0.0
+                    self.tableau.tableau[-1] -= factor * self.tableau.tableau[r]
                     
             status = self.tableau.solve_primal()
             if status != "optimal":
@@ -300,14 +222,7 @@ class DualSimplexSolver(FractionalKnapsackMixin, BaseSimplexSolver):
             
         # The original slack variable for constraint_idx was at column n + constraint_idx
         slack_col = self.tableau.n + constraint_idx
-        
-        # Update the RHS column for all rows (including objective row)
-        for r in range(self.tableau.m + 1):
-            self.tableau.tableau[r][-1] += delta * self.tableau.tableau[r][slack_col]
-            
-            if abs(self.tableau.tableau[r][-1]) < 1e-12:
-                self.tableau.tableau[r][-1] = 0.0
-                
+        self.tableau.tableau[:, -1] += delta * self.tableau.tableau[:, slack_col]
         return self.tableau.solve_dual()
 
     def update_objective(self, col_idx: int, delta: float) -> str:
@@ -318,19 +233,11 @@ class DualSimplexSolver(FractionalKnapsackMixin, BaseSimplexSolver):
         if self.tableau is None:
             return "error"
             
-        self.tableau.tableau[-1][col_idx] -= delta
-        
-        # If the variable is currently in the basis, restore canonical form
+        self.tableau.tableau[-1, col_idx] -= delta
         for r in range(self.tableau.m):
             if self.tableau.basis[r] == col_idx:
-                for c in range(len(self.tableau.tableau[-1])):
-                    self.tableau.tableau[-1][c] += delta * self.tableau.tableau[r][c]
+                self.tableau.tableau[-1] += delta * self.tableau.tableau[r]
                 break
-                
-        for c in range(len(self.tableau.tableau[-1])):
-            if abs(self.tableau.tableau[-1][c]) < 1e-12:
-                self.tableau.tableau[-1][c] = 0.0
-                
         return self.tableau.solve_primal()
         
     def add_constraint_and_reoptimize(self, coeff: List[float], rhs: float) -> str:
