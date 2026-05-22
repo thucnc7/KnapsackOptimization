@@ -23,3 +23,7 @@ results/*
 !results/plots/.gitkeep
 !results/quality/
 !results/quality/.gitkeep
+
+# Webapp job logs
+results/csv/job_*.log
+
