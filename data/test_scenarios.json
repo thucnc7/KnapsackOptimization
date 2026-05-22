@@ -1,16 +1,25 @@
 [
   {
-    "name": "benchmark_core",
-    "description": "Bo testcase chuan de so sanh cong bang giua fractional va 0/1 (n, capacity_ratio, pearson_r).",
-    "n_values": [10, 50, 100, 500],
+    "name": "benchmark_core_exact",
+    "description": "Bo testcase quy mo nho danh rieng cho cac thuat toan chinh xac (Vet can, Nhanh can, Don hinh, Gomory). Dung 3 moc N nho, ket hop sai so Gauss de ve duong cong ham mu ma khong bi Timeout.",
+    "n_values": [15, 30, 45],
     "max_weight": 1000,
     "capacity_ratios": [0.1, 0.5, 0.9],
     "pearson_r_targets": [0.0, 0.5, 0.95],
-    "instances_per_config": 5
+    "instances_per_config": 15
+  },
+  {
+    "name": "benchmark_core_heuristic",
+    "description": "Bo testcase quy mo lon danh cho Quy hoach dong va Tham lam. Ap dung y tuong cua Leader: 3 moc N lon (250, 500, 750) ket hop sai so cuc lon de tao thanh dai du lieu lien tuc (Gaussian Mixture).",
+    "n_values": [250, 500, 750],
+    "max_weight": 1000,
+    "capacity_ratios": [0.1, 0.5, 0.9],
+    "pearson_r_targets": [0.0, 0.5, 0.95],
+    "instances_per_config": 15
   },
   {
     "name": "benchmark_stress",
-    "description": "Bo testcase tu stres de danh gia kha nang mo rong cua giai thuat, voi cac gia tri n, capacity_ratio, pearson_r khac.",
+    "description": "Bo testcase stress test danh gia gioi han bo nho cua Quy hoach dong, co tinh day max_weight len 100,000 de xem bang DP phinh to co gay OOM (Out of Memory) khong.",
     "n_values": [50],
     "max_weight": 100000,
     "capacity_ratios": [0.5],
@@ -19,7 +28,7 @@
   },
   {
     "name": "extreme_n_test",
-    "description": "Ep thuat toan Tham Lam va Quy Hoach Dong chay het cong suat voi N khong lo",
+    "description": "Ep thuat toan Tham Lam chay het cong suat voi N khong lo, kiem tra xem do phuc tap O(N log N) duy tri duoc bao lau truoc khi qua tai.",
     "n_values": [1000, 5000, 10000],
     "max_weight": 100,
     "capacity_ratios": [0.5],

@@ -6,7 +6,10 @@ import argparse
 import csv
 import json
 import multiprocessing as mp
+import os
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Sequence, Tuple
@@ -227,12 +230,12 @@ def _build_row(
         "n": int(metadata.get("n", len(instance.items))),
         "capacity": int(round(instance.capacity)),
         "capacity_to_weight_ratio": metadata.get(
-            "capacity_ratio_anchor",
+            "capacity_ratio_actual",
             metadata.get("capacity_ratio", 0.0),
         ),
         "pearson_corr": metadata.get(
-            "target_pearson_r",
-            metadata.get("pearson_r", 0.0),
+            "pearson_r",
+            metadata.get("pearson_actual", 0.0),
         ),
         "density_variance": _density_variance(instance.items),
     }
@@ -354,8 +357,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timeout",
         type=int,
-        default=60,
+        default=5,
         help="Timeout (seconds) for each algorithm run.",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=max(1, (os.cpu_count() or 4) // 2),
+        help="Number of parallel jobs to run.",
     )
     parser.add_argument(
         "--limit",
