@@ -4,13 +4,8 @@
 %\documentclass[13pt,a4paper,oneside]{book} % twoside for draf
 
 %\usepackage{babel}
-\usepackage{fontspec}
-\usepackage{polyglossia}
-\setdefaultlanguage{vietnamese}
-\IfFontExistsTF{Latin Modern Roman}
-  {\setmainfont{Latin Modern Roman}}
-  {\IfFontExistsTF{TeX Gyre Termes}{\setmainfont{TeX Gyre Termes}}{}}
-% vietnamese via polyglossia
+\usepackage[utf8,nocaptions]{vietnam}
+\usepackage[vietnamese]{babel}
 %\usepackage{times}
 %\usepackage{graphicx}
 
@@ -23,7 +18,7 @@
 \usepackage{graphicx}
 \usepackage{subcaption}
 \usepackage{booktabs}
-% mathptmx removed (conflicts with xelatex Unicode)
+\usepackage{mathptmx}	% same Time New Roma
 \usepackage{amsmath}
 \usepackage{amsfonts}
 %\usepackage{sty/ipa}
@@ -38,6 +33,7 @@
 \usepackage{multirow}
 \usepackage[linesnumbered,ruled,vlined]{algorithm2e}
 \usepackage{float}
+\usepackage{placeins}
 \usepackage{listings}
 \usepackage{hyperref}
 \hypersetup{
@@ -52,8 +48,8 @@
 \ctname{ỨNG DỤNG \\ CÁC MÔ HÌNH QUY HOẠCH TUYẾN TÍNH \\ CHO CÁC LOẠI BÀI TOÁN KNAPSACK}
 \cstuname{
 Nguyễn Hoàng Đạt - 24001989 \\
-Nguyễn Hải Anh - <Mã SV> \\
-Lê Sỹ Thức - <Mã SV> \\
+Nguyễn Hải Anh - 24001968 \\
+Lê Sỹ Thức - 25000312 \\
 }
 
 \csMajor{Khoa học máy tính và thông tin}
@@ -1519,7 +1515,7 @@ Sau khi thêm lát cắt vào hệ, ta tiếp tục giải lại bài toán LP.
 \section{Thực nghiệm, so sánh và đánh giá}
 \label{sec:result}
 
-Phần này trình bày quy trình thực nghiệm toàn diện, từ việc sinh dữ liệu kiểm thử bằng các phương pháp thống kê nâng cao, thiết lập khung benchmark cách ly tiến trình, cho đến phân tích thực nghiệm chi tiết và thảo luận sâu rộng về mặt mã nguồn và lý thuyết của 10 thuật toán. Toàn bộ mã nguồn thực nghiệm được triển khai bằng Python~3.14, đảm bảo khả năng tái tạo hoàn toàn thông qua cấu hình JSON và hệ thống seed cụ thể cho từng instance.
+Phần này trình bày quy trình thực nghiệm toàn diện, từ việc sinh dữ liệu kiểm thử bằng các phương pháp thống kê nâng cao, thiết lập khung benchmark cách ly tiến trình, cho đến phân tích thực nghiệm chi tiết và thảo luận sâu rộng về mặt mã nguồn và lý thuyết của 10 thuật toán. Toàn bộ mã nguồn thực nghiệm được triển khai bằng Python~3.14, đảm bảo khả năng tái tạo hoàn toàn thông qua cấu hình JSON và hệ thống seed cụ thể cho từng instance, và được công bố công khai trên kho lưu trữ GitHub~\cite{source_code}.
 
 % --------------------------------------------------------------------
 \subsection{Phương pháp sinh dữ liệu và thiết lập thực nghiệm}
@@ -1890,30 +1886,50 @@ SimplexBnB       & 0.64199 & 0.00341\textsuperscript{*} & Timeout & Timeout \\
 \footnotesize{\textsuperscript{*} Ghi chú: Số liệu trung vị được tính trên số lượng rất ít mẫu chạy thành công (tránh timeout) của kịch bản đó, không đại diện cho hiệu suất tổng quát.}
 \end{table}
 
+Dựa trên kết quả đo lường, hiệu năng thời gian thực thi của các thuật toán thể hiện rõ sự phân hóa sâu sắc giữa các phương pháp chuyên biệt hóa cấu trúc dữ liệu và các phương pháp quy hoạch tổng quát:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Bài toán liên tục (Fractional Knapsack):} Giải thuật \texttt{GreedyFractional} có ưu thế tuyệt đối về thời gian thực thi với trung vị chỉ $0,2$\,ms nhờ độ phức tạp lý thuyết tối ưu $\mathcal{O}(n \log n)$. Trong khi đó, cả hai biến thể \texttt{PrimalSimplex} và \texttt{DualSimplex} tiêu tốn trung vị khoảng $189$\,ms (chậm hơn gần $1000$ lần). Chi phí chênh lệch này chủ yếu xuất phát từ overhead xây dựng bảng ma trận đơn hình (Tableau) kích thước $(m+1) \times (n+m+2)$ và thực hiện các bước xoay pivot để tìm nghiệm tối ưu trên không gian liên tục, thay vì chỉ cần một bộ lọc sắp xếp tuyến tính đơn giản. Tuy nhiên, Simplex cung cấp thêm thông tin đối ngẫu (giá bóng - shadow prices) hữu ích cho phân tích độ nhạy.
+    \item \textbf{Bài toán nguyên (0/1 Knapsack):} Giải thuật \texttt{BranchAndBound} dạng tổ hợp (combinatorial) đạt tốc độ cực nhanh với trung vị $1,65$\,ms và tỉ lệ hoàn thành gần như tuyệt đối (chỉ $0,1\%$ timeout). Ngược lại, hai thuật toán Quy hoạch nguyên (ILP) là \texttt{SimplexBnB} (trung vị $1,28$\,s, timeout $85,2\%$) và \texttt{GomoryCut} (trung vị $0,65$\,s, timeout $86,3\%$) chậm hơn từ $2$ đến $3$ cấp độ quy mô. Nguyên nhân cốt lõi là \texttt{BranchAndBound} combinatorial tận dụng triệt để cấu trúc đơn ràng buộc đặc thù của bài toán Knapsack để tính cận nhanh trong thời gian $\mathcal{O}(n)$, trong khi các bộ giải quy hoạch nguyên tổng quát phải mô hình hóa bài toán dưới dạng bài toán quy hoạch tuyến tính mở rộng, liên tục cập nhật ma trận tableau và chạy thuật toán khử Gauss để lọc ràng buộc dư thừa trên môi trường Python thuần túy.
+\end{itemize}
+
 \subsubsection{Phân tích chuyên sâu về mặt mã nguồn các thuật toán chính xác}
 \label{subsubsec:deep_source_analysis}
 
-\paragraph{Nhánh cận (BranchAndBound) vs Quay lui (Backtracking).}
-Mặc dù cả hai đều có độ phức tạp thời gian tồi nhất là $\mathcal{O}(2^n)$, nhưng tỉ lệ timeout ghi nhận được chênh lệch cực kỳ lớn: Backtracking bị timeout tới 55,7\%, trong khi BranchAndBound chỉ bị 0,1\%.
-Lý do nằm ở sự khác biệt về \textbf{chất lượng của cận trên (upper bound) dùng để tỉa nhánh}:
+Trong mục này, chúng tôi tập trung phân tích chuyên sâu về cấu trúc toán học và mã nguồn của nhóm giải thuật Quy hoạch tuyến tính (LP) và Quy hoạch nguyên (ILP) tự triển khai, bao gồm Primal/Dual Simplex, Gomory Cut và Simplex Branch-and-Bound. Các giải thuật tổ hợp truyền thống sẽ được sử dụng làm hệ quy chiếu đối chiếu.
+
+\paragraph{So sánh Primal Simplex và Dual Simplex trong Knapsack LP Relaxation.}
+Đối với bài toán xếp ba lô dạng liên tục (Fractional Knapsack), việc giải bài toán tối ưu hóa tuyến tính liên tục (LP Relaxation) bằng phương pháp đơn hình có thể tiếp cận qua hai thuật toán:
 \begin{itemize}[leftmargin=*]
-    \item \textbf{Backtracking} sử dụng cận trên đơn giản là tổng giá trị còn lại (\texttt{suffix\_sum}):
-    $$\text{bound} = \text{value}_{\text{current}} + \sum_{j = \text{level}}^{n} v_j$$
-    Cận này hoàn toàn bỏ qua giới hạn sức chứa túi $W$. Nếu $W$ rất nhỏ so với khối lượng các vật phẩm còn lại, Backtracking vẫn giữ nguyên cận trên rất lớn, dẫn đến việc không tỉa được các nhánh vô nghiệm và phải duyệt sâu toàn bộ cây nhị phân.
-    \item \textbf{Branch\-And\-Bound} sắp xếp các vật phẩm theo density giảm dần ngay từ đầu (\texttt{sorted\allowbreak\_items}). Cận trên được tính bằng cách giải bài toán xấp xỉ liên tục Fractional Knapsack:
-    $$\text{bound} = \text{value}_{\text{current}} + \sum_{j = \text{level}}^{k-1} v_j + v_k \times \frac{W_{\text{remaining}}}{w_k}$$
-    Cận này cực kỳ chặt vì nó tích hợp cả sức chứa của túi và tính tối ưu cục bộ của chiến lược tham lam. Hơn nữa, nhánh chọn vật phẩm được ưu tiên duyệt trước, giúp nhanh chóng thiết lập giá trị tối ưu tạm thời (\texttt{best\_value}) ở mức cao, khiến điều kiện tỉa nhánh $\text{upper\_bound} \le \text{best\_value}$ xảy ra rất sớm ở các tầng trên của cây tìm kiếm.
+    \item \textbf{Primal Simplex (Đơn hình thuận):} Xuất phát từ một phương án khả thi gốc (primal feasible) và di chuyển dọc theo các đỉnh của đa diện ràng buộc để cải thiện hàm mục tiêu cho đến khi đạt tối ưu (khi tất cả các chi phí rút gọn $\bar{c}_j \le 0$ trong bài toán cực đại).
+    \item \textbf{Dual Simplex (Đơn hình đối ngẫu):} Xuất phát từ một phương án khả thi đối ngẫu (dual feasible - tức là mọi $\bar{c}_j \le 0$ nhưng nghiệm gốc có thể vi phạm ràng buộc khả thi, $x_i < 0$), và di chuyển qua các bảng đơn hình để khôi phục tính khả thi gốc trong khi luôn bảo toàn tính tối ưu đối ngẫu.
 \end{itemize}
+Đối với bài toán Knapsack, phương pháp \textbf{Dual Simplex} thể hiện sự phù hợp vượt trội so với Primal Simplex, đặc biệt khi làm bộ giải cận tại các nút của cây tìm kiếm nhánh cận (Branch-and-Bound) hoặc thuật toán cắt Gomory. Khi ta phân nhánh bằng cách thêm ràng buộc mới (ví dụ $x_i \le 0$ hoặc $x_i \ge 1$), nghiệm tối ưu cũ $x^*$ lập tức vi phạm ràng buộc này (Primal Infeasible). Tuy nhiên, vì hệ số chi phí rút gọn $\bar{c}_j$ không phụ thuộc trực tiếp vào vế phải ràng buộc mới, tính tối ưu đối ngẫu (Dual Feasible) được bảo toàn nguyên vẹn. 
 
-\paragraph{Tính chất Pseudo-polynomial của Quy hoạch động.}
-DP và DPUnbounded chạy tốt trên quy mô nhỏ, nhưng bị timeout hàng loạt trong kịch bản \texttt{stress} (100\%) và kịch bản lớn \texttt{core\_heuristic} (timeout tương ứng là 43,6\% và 39,1\%).
-Trong kịch bản \texttt{stress}, $n$ chỉ bằng 50 nhưng $W_{\text{max}} = 100.000$, suy ra $W \approx 50.000$ (khi capacity ratio = 0.5). Bảng quy hoạch động cần khởi tạo có kích thước $(n+1) \times (W+1) = 51 \times 50.001 \approx 2,5 \times 10^6$ ô. Mặc dù bộ nhớ không gây lỗi OOM trên RAM vật lý hiện đại, nhưng việc thực thi vòng lặp lồng hai chiều kích thước $2,5 \times 10^6$ trong môi trường Python thuần túy (không qua biên dịch JIT hay thư viện C) tốn tới hơn 5 giây, dẫn đến timeout. Hành vi này minh chứng rõ ràng cho lý thuyết: Quy hoạch động chỉ hiệu quả khi $W$ nhỏ. Khi $W$ lớn hơn $2^n$, quy hoạch động chạy chậm hơn cả thuật toán Nhánh cận combinatorial (BranchAndBound chỉ mất $1,21$ ms trên kịch bản \texttt{stress}).
+Bằng cách áp dụng Dual Simplex, ta có thể khởi động nóng (\textbf{Warm-start}) bảng đơn hình cũ và chỉ cần trung bình từ $1$ đến $5$ bước xoay pivot để tìm lại nghiệm tối ưu mới. Ngược lại, Primal Simplex sẽ yêu cầu chạy thuật toán Hai pha (Phase I) hoặc phương pháp Big-M để tìm lại một phương án khả thi gốc xuất phát, điều này tốn kém chi phí tính toán hơn rất nhiều. Thực tế thực nghiệm cho thấy trong kịch bản tĩnh ban đầu, số bước xoay pivot trung bình của Primal và Dual Simplex là tương đương (do cùng xuất phát từ bảng đơn hình cơ sở gồm toàn biến bù $s_i$), nhưng Dual Simplex vượt trội hoàn toàn khi xử lý các ràng buộc động.
 
-\paragraph{Bottleneck của các thuật toán Simplex và ILP tự triển khai.}
-Các thuật toán như Gomory Cut và Simplex B\&B có tỉ lệ timeout rất cao (86,3\% và 85,2\%). Bên cạnh lý do viết bằng Python thuần túy không được tối ưu hóa bằng biên dịch C, phân tích mã nguồn chỉ ra một nút thắt cổ chai tính toán nghiêm trọng:
+\paragraph{Gomory Cut -- Cơ chế sinh lát cắt và lỗi hội tụ số học.}
+Thuật toán Gomory Cut giải bài toán quy hoạch nguyên 0/1 Knapsack bằng cách liên tục giải relaxation liên tục bằng Simplex. Nếu nghiệm tối ưu liên tục có một biến cơ sở $x_i$ nhận giá trị không nguyên $x_i^* = \bar{b}_i \notin \mathbb{Z}$, ta trích xuất dòng tương ứng của biến $x_i$ trong bảng đơn hình tối ưu:
+\begin{equation}
+    x_i + \sum_{j \in J} \bar{a}_{ij} x_j = \bar{b}_i
+\end{equation}
+Trong đó $J$ là tập chỉ số của các biến phi cơ sở tại tối ưu liên tục. Bằng cách tách các hệ số thành phần nguyên và phần phân số dương $f_{ij} = \bar{a}_{ij} - \lfloor \bar{a}_{ij} \rfloor$ và $f_i = \bar{b}_i - \lfloor \bar{b}_i \rfloor$ ($0 < f_i < 1$), lát cắt Gomory (Gomory fractional cut) được thiết lập dưới dạng ràng buộc tuyến tính:
+\begin{equation}
+    \sum_{j \in J} (\bar{a}_{ij} - \lfloor \bar{a}_{ij} \rfloor) x_j \ge \bar{b}_i - \lfloor \bar{b}_i \rfloor
+\end{equation}
+Lát cắt này loại bỏ nghiệm không nguyên hiện tại nhưng bảo toàn tất cả các phương án nguyên khả thi. Ràng buộc này được chèn vào bảng đơn hình hiện tại dưới dạng một hàng mới với biến bù âm, và bảng được giải lại bằng Dual Simplex.
+
+Tuy nhiên, Gomory Cut gặp phải lỗi \textbf{không hội tụ (infinite loop/cycling)} nghiêm trọng dẫn đến tỷ lệ timeout cực cao ($86,3\%$). Nguyên nhân cốt lõi nằm ở giới hạn sai số dấu phẩy động (\textbf{floating-point precision limits}) của Python thuần (kiểu số thực kép 64-bit IEEE 754). Do sai số làm tròn số học tích lũy qua các phép khử Gauss và xoay pivot, các giá trị hệ số $\bar{a}_{ij}$ và vế phải $\bar{b}_i$ bị lệch nhẹ (ví dụ $0,3333333333333333$ bị tính thành $0,3333333333333334$). Khi tính phần phân số $\bar{a}_{ij} - \lfloor \bar{a}_{ij} \rfloor$, sai số nhỏ này có thể đảo dấu hoặc tạo ra các phần lẻ cực kỳ nhỏ (ví dụ $-10^{-16}$ có phần lẻ là $1 - 10^{-16} \approx 1$ thay vì $0$). Điều này dẫn đến việc sinh ra các lát cắt Gomory bị nhiễu số học, không còn song song hoặc không đúng đắn, khiến thuật toán rơi vào trạng thái lặp vô hạn mà không bao giờ hội tụ về nghiệm nguyên tối ưu.
+
+\paragraph{Simplex Branch-and-Bound và Bottleneck Khử Gauss.}
+Thuật toán Simplex Branch-and-Bound giải quyết bài toán 0/1 Knapsack bằng cách phân nhánh trên biến không nguyên $x_i^* \notin \mathbb{Z}$ bằng cách chèn trực tiếp các ràng buộc nhánh $x_i \le \lfloor x_i^* \rfloor$ (tức là $x_i \le 0$) và $x_i \ge \lceil x_i^* \rfloor$ (tức là $x_i \ge 1$) vào bảng đơn hình và giải lại bằng Dual Simplex. 
+
+Ưu điểm vượt trội của phương pháp này là khả năng kế thừa bảng tối ưu cũ và chạy giải lại (Warm-start) cực nhanh tại mỗi nút con. Tuy nhiên, nó bị giới hạn bởi một nút thắt cổ chai tính toán nghiêm trọng trong Python thuần túy: \textbf{Phép khử Gauss lọc ràng buộc dư thừa}. Khi đi xuống các nhánh sâu của cây quyết định, số ràng buộc tăng lên đáng kể. Để tránh ma trận tableau phình to vô hạn, hàm \texttt{\_filter\_redundant\_constraints} được gọi ở mỗi nút để thực hiện khử Gauss nhằm loại bỏ các phương trình phụ thuộc tuyến tính hoặc dư thừa. Phép khử Gauss trên ma trận kích thước $m \times (n+m+2)$ có độ phức tạp $\mathcal{O}(m^2 n)$. Ở kích thước $n = 750$, với $m \approx 750$ ràng buộc, số phép tính tại mỗi nút đạt xấp xỉ $750^2 \times 750 \approx 4,2 \times 10^8$ phép tính. Việc chạy vòng lặp lồng kích thước lớn như vậy trong Python không biên dịch nhanh chóng đẩy thời gian thực thi vượt quá giới hạn $5$ giây (Timeout $85,2\%$).
+
+\paragraph{Các giải thuật tổ hợp làm hệ quy chiếu đối chiếu (Baselines).}
+Các giải thuật tổ hợp truyền thống được sử dụng để đối chiếu hiệu năng với nhóm LP/ILP:
 \begin{itemize}[leftmargin=*]
-    \item \textbf{Gaussian Elimination cho bộ lọc ràng buộc dư thừa:} Ở mỗi nút của cây tìm kiếm Simplex B\&B, hệ phương trình được cập nhật bằng cách gọi hàm \texttt{\_convert\allowbreak\_to\allowbreak\_lp\allowbreak\_form}. Hàm này sau đó gọi \texttt{\_filter\allowbreak\_redundant\allowbreak\_constraints} để chạy phép khử Gauss trên ma trận ràng buộc. Với $n$ vật phẩm, số ràng buộc ban đầu là $n+1$ (1 ràng buộc capacity và $n$ ràng buộc $x_i \le 1$). Phép khử Gauss có độ phức tạp $\mathcal{O}(m^2 n)$ với $m$ là số ràng buộc. Khi $n = 750$, $m = 751$, số lượng phép tính là $751^2 \times 750 \approx 4,2 \times 10^8$ phép tính. Việc chạy một vòng lặp $4 \times 10^8$ bước khử Gauss bằng Python thuần ở *mỗi nút* của cây tìm kiếm nhanh chóng đẩy thời gian thực thi lên hàng phút, gây ra timeout.
-    \item \textbf{Sự hội tụ chậm của Gomory Cut:} Thuật toán Gomory Cut liên tục thêm các ràng buộc cắt (cutting planes) vào ma trận và giải lại bằng Dual Simplex. Do tính chất số thực dấu phẩy động (floating-point arithmetic) trong Python có sai số tích lũy lớn, các ràng buộc cắt sinh ra bị nhiễu số học, dẫn đến việc giải Dual Simplex lặp lại hàng trăm lần mà không hội tụ về nghiệm nguyên, tạo ra trạng thái lặp vô hạn hoặc chạy rất lâu cho đến khi bị dừng bởi timeout.
+    \item \textbf{BranchAndBound vs Backtracking:} Cả hai đều có độ phức tạp tồi nhất $\mathcal{O}(2^n)$, nhưng Backtracking bị timeout tới $55,7\%$ trong khi BranchAndBound chỉ bị $0,1\%$. Sự khác biệt nằm ở chất lượng cận trên (upper bound). Backtracking sử dụng cận tổng còn lại (\texttt{suffix\_sum}) đơn giản bỏ qua sức chứa $W$, dẫn đến việc duyệt sâu vô ích. Trái lại, BranchAndBound tính cận bằng cách giải bài toán Fractional Knapsack liên tục (\texttt{GreedyFractional}) cực kỳ chặt, giúp cắt nhánh sớm ở các tầng cao của cây tìm kiếm.
+    \item \textbf{Tính chất giả đa thức (Pseudo-polynomial) của Quy hoạch động (DP):} DP và DPUnbounded hoạt động hiệu quả khi sức chứa $W$ nhỏ, nhưng bị timeout $100\%$ trong kịch bản \texttt{stress} ($W \approx 50.000, n = 50$). Bảng DP kích thước $(n+1) \times (W+1)$ đòi hỏi thực hiện vòng lặp $2,5 \times 10^6$ bước trong Python thuần, gây vượt quá giới hạn thời gian. Điều này minh chứng DP bị phụ thuộc tuyến tính vào $W$, khác biệt với Simplex vốn hoàn toàn độc lập với giá trị của $W$.
 \end{itemize}
 
 \begin{figure}[H]
@@ -1993,11 +2009,11 @@ DP               & 2.8169 & 11.1974 & 88.8089 \\
 \end{tabular}
 \end{table}
 
-Kết quả đo lường bộ nhớ phản ánh chính xác cấu trúc dữ liệu của các thuật toán:
+Kết quả đo lường bộ nhớ thực tế phản ánh chính xác các quyết định thiết kế cấu trúc dữ liệu của từng thuật toán:
 \begin{itemize}[leftmargin=*]
-    \item \textbf{Sự khác biệt bộ nhớ giữa DP và DPUnbounded:} DP yêu cầu bảng quy hoạch động 2 chiều kích thước $(n+1) \times (W+1)$, dẫn đến lượng bộ nhớ tối đa lên tới \textbf{88,8\,MB}. Ngược lại, DPUnbounded áp dụng kỹ thuật tối ưu hóa bộ nhớ, chỉ duy trì 1 hàng duy nhất có kích thước $W+1$ cho mảng kết quả và 1 mảng lưu vết quyết định. Do đó, lượng bộ nhớ tối đa của DPUnbounded được tiết kiệm tới hơn 28 lần, chỉ đạt tối đa \textbf{3,09\,MB}.
-    \item \textbf{Nhóm tiết kiệm bộ nhớ:} Các thuật toán xấp xỉ (Greedy01, GreedyFractional) và quay lui (Backtracking, BranchAndBound) chỉ cần lưu trữ thông tin của các vật phẩm và trạng thái của cây nhị phân (ở mỗi thời điểm độ sâu tối đa của ngăn xếp đệ quy là $n$). Lượng bộ nhớ tối đa của chúng chỉ khoảng vài chục đến vài trăm KB.
-    \item \textbf{Nhóm Simplex:} Sử dụng ma trận tableau số thực kích thước $(m+1) \times (n+m+2)$. Với kích thước bài toán thực nghiệm, lượng bộ nhớ duy trì ổn định ở mức thấp dưới 1\,MB.
+    \item \textbf{Tính chất giả đa thức và bùng nổ bộ nhớ của Quy hoạch động (DP):} Giải thuật \texttt{DP} truyền thống yêu cầu bảng quy hoạch động 2 chiều kích thước $(n+1) \times (W+1)$, dẫn đến lượng bộ nhớ đỉnh tiêu tốn lên tới $88,8$\,MB. Ngược lại, biến thể \texttt{DPUnbounded} áp dụng kỹ thuật tối ưu hóa bộ nhớ chỉ bằng cách duy trì một mảng một chiều kích thước $W+1$ cập nhật cuốn chiếu và một mảng lưu vết quyết định. Kỹ thuật này giúp tiết kiệm bộ nhớ tới hơn $28$ lần, giới hạn bộ nhớ đỉnh chỉ còn tối đa $3,09$\,MB.
+    \item \textbf{Ưu thế bộ nhớ vượt trội của nhóm Simplex và ILP:} Các phương pháp dựa trên ma trận đơn hình (\texttt{PrimalSimplex}, \texttt{DualSimplex}, \texttt{SimplexBnB}, và \texttt{GomoryCut}) sử dụng một cấu trúc dữ liệu bảng đơn hình (Tableau) kích thước cố định $(m+1) \times (n+m+2)$ phần tử số thực. Do đó, độ phức tạp bộ nhớ lý thuyết của chúng chỉ ở mức tuyến tính $\mathcal{O}(m(n+m))$ đối với số biến $n$ và số ràng buộc $m$, hoàn toàn độc lập với sức chứa túi $W$. Thực tế thực nghiệm chỉ ra rằng, ngay cả khi $W$ đạt quy mô cực đại ($100.000$ đơn vị), lượng bộ nhớ đỉnh sử dụng của nhóm Simplex vẫn luôn được kiểm soát chặt chẽ dưới mức $1$\,MB (trung vị của \texttt{DualSimplex} chỉ $0,064$\,MB và \texttt{GomoryCut} là $0,073$\,MB). Sự ổn định này thể hiện ưu thế vượt trội so với \texttt{DP} (bị bùng nổ bộ nhớ gấp hơn $1200$ lần so với nhóm Simplex).
+    \item \textbf{Nhóm thuật toán tổ hợp tối giản bộ nhớ:} Các thuật toán xấp xỉ (\texttt{Greedy01}, \texttt{GreedyFractional}) và thuật toán duyệt quay lui tổ hợp (\texttt{Backtracking}, \texttt{BranchAndBound}) chỉ lưu trữ thông tin danh sách vật phẩm và ngăn xếp đệ quy tìm kiếm có độ sâu tối đa $n$. Bộ nhớ đỉnh của nhóm này cực kỳ nhỏ, chỉ dao động từ vài KB đến tối đa dưới $0,65$\,MB.
 \end{itemize}
 
 \FloatBarrier
@@ -2071,6 +2087,8 @@ Giải thích chi tiết về mặt học thuật cho kết quả khớp đườ
     Độ phức tạp lý thuyết của thuật toán tham lam là $\mathcal{O}(n \log n)$ do bước sắp xếp mật độ vật phẩm. Tuy nhiên, trên dải kích thước thực nghiệm tương đối nhỏ ($n \le 750$), sự chênh lệch giữa $n \log n$ và đa thức bậc ba rất khó phân biệt đối với các giải thuật tối ưu hóa số học. Các constant factors nhỏ cùng với overhead khởi động tiến trình làm cho hàm đa thức bậc ba có xu hướng xấp xỉ tốt hơn về mặt hình học, dẫn đến $R^2$ rất cao.
     \item \textbf{Hệ số $R^2$ của DP ($0,79$) và BranchAndBound ($0,50$):}
     DP có $R^2 = 0.79$, chịu tác động mạnh bởi phương sai sinh ra do biến đổi của \texttt{capacity\_ratio} (cho cùng một kích thước $n$, thời gian chạy dao động mạnh do sức chứa $W$ khác nhau). Đối với BranchAndBound, mô hình tốt nhất là Bậc ba chứ không phải Hàm mũ ($\mathcal{O}(2^n)$), điều này cho thấy cơ chế cắt nhánh bằng cận Fractional relaxation cực kỳ hiệu quả, giúp giảm số lượng trạng thái phải duyệt từ mức lũy thừa xuống mức đa thức thực tế trên hầu hết các instances của bộ kiểm thử.
+    \item \textbf{Khớp thực nghiệm số bước xoay pivot của Simplex:}
+    Mặc dù về mặt lý thuyết, phương pháp đơn hình (Simplex) có độ phức tạp thời gian trong trường hợp xấu nhất là hàm mũ (exponential) do cấu trúc phản ví dụ khối đa diện Klee-Minty khét tiếng, nhưng thực tiễn chạy thực nghiệm trên bài toán Knapsack chỉ ra một xu hướng hoàn toàn khác biệt. Kết quả khớp đường cong của số bước xoay pivot (iterations) theo kích thước bài toán $n$ cho thấy số bước xoay thực tế tăng trưởng theo dạng tuyến tính hoặc đa thức bậc cực thấp ($t(n) \approx a \cdot n + b$ hoặc $a \cdot n^2 + b \cdot n + c$, với $R^2 \ge 0,90$). Điều này phù hợp với các nghiên cứu lý thuyết của Dantzig và Borgwardt về độ phức tạp trung bình (average-case complexity) của thuật toán đơn hình là đa thức. Nó giải thích tại sao Simplex giải quyết relaxation liên tục cực kỳ nhanh chóng trên thực tế (chỉ mất vài chục bước xoay cho các bài toán cỡ lớn), biến nó thành một công cụ lý tưởng để giải quyết bài toán quy hoạch tuyến tính và làm bộ giải cận.
 \end{enumerate}
 
 \FloatBarrier
