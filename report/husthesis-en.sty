@@ -1,64 +1,245 @@
-% Minimal stub for husthesis-en.sty so the report compiles without the
-% official HUST class. Provides cover-page macros, layout commands, and
-% no-op nomenclature so the report's preamble loads cleanly.
+% this package is originally designed by: thanhhungqb@gmail.com
+% more infor mation and update: https://github.com/HungTVo/thesis-template
+% modified @mim.hus 
+% this package also use code from: 
+%	http://tex.stackexchange.com/questions/51483/how-to-write-abstract-and--in-book-format
+% thank for Fredrik M. Kirkemo to givve a useful code
 
-\NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{husthesis-en}[2026/05/23 Knapsack report stub for HUST thesis]
+\ProvidesPackage{husthesis}
 
+\RequirePackage{graphicx}
+\RequirePackage{vietnam}
 \RequirePackage{geometry}
-\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=3cm, right=2cm}
 
-% Cover-page metadata setters
-\newcommand{\@ctname}{Report Title}
-\newcommand{\ctname}[1]{\renewcommand{\@ctname}{#1}}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usepackage{indentfirst}
 
-\newcommand{\@cstuname}{Author}
-\newcommand{\cstuname}[1]{\renewcommand{\@cstuname}{#1}}
+\usepackage{nomencl}
+\makenomenclature
+\renewcommand{\nomname}{Chú thích}
 
-\newcommand{\@csMajor}{Major}
-\newcommand{\csMajor}[1]{\renewcommand{\@csMajor}{#1}}
+% \usepackage{geometry}
+\def\thesislayout{	% A4: 210 × 297
+	\geometry{
+		a4paper,
+		total={155mm,242mm},  % fix over page
+		left=35mm,
+		top=25mm,
+	}
+}
+\renewcommand{\baselinestretch}{1.5}
 
-\newcommand{\@cttime}{2026}
-\newcommand{\cttime}[1]{\renewcommand{\@cttime}{#1}}
+%\addtokomafont{chapter}{\huge\bfseries\rmfamily }
+%\addtokomafont{section}{\large\bfseries\rmfamily\raggedright}
+%\addtokomafont{subsection}{\bfseries\rmfamily}
 
-\newcommand{\@crname}{Tiểu luận khoa học}
-\newcommand{\crname}[1]{\renewcommand{\@crname}{#1}}
+%%\renewcommand{\raggedsection}{\centering}
 
-% Layout hook — no-op in the stub.
-\newcommand{\thesislayout}{}
+%\addtokomafont{disposition}{\rmfamily}
+%\addtokomafont{chapterentry}{\mdseries}
 
-\newcommand{\coverpage}{%
-  \begin{titlepage}
-    \begin{center}
-      {\large \textbf{TRƯỜNG ĐẠI HỌC BÁCH KHOA HÀ NỘI}\par}
-      \vspace{0.4cm}
-      {\large \textbf{HANOI UNIVERSITY OF SCIENCE AND TECHNOLOGY}\par}
-      \vspace{2cm}
-      {\large \textbf{\@crname}\par}
-      \vspace{1.5cm}
-      {\LARGE \textbf{\@ctname}\par}
-      \vspace{2cm}
-      {\large \@cstuname\par}
-      \vspace{1cm}
-      {\large Ngành: \@csMajor\par}
-      \vfill
-      {\large Hà Nội, \@cttime\par}
-    \end{center}
-  \end{titlepage}
+\AfterTOCHead[toc]{\KOMAoptions{fontsize=13pt}}
+
+
+%\usepackage{titlesec}
+%\titleformat
+%{\chapter} % command
+%[display] % shape
+%{} % format
+%{\centering \huge  Chương \thechapter} % label
+%{0.5ex} % sep
+%{
+%    \vspace{1ex}
+%    \centering \huge 
+%} % before-code
+%[
+%\vspace{-0.5ex}%
+%] % after-code
+
+\newcommand{\@sdeptname}{Khoa Toán - Cơ - Tin học}
+\newcommand{\csdeptname}[1]{\renewcommand{\@sdeptname}{#1}}
+
+\newcommand{\@tname}{Thesis's title}
+\newcommand{\ctname}[1]{\renewcommand{\@tname}{#1}}
+
+\newcommand{\@stuname}{Student 1: Nguyễn Văn An (5...) }
+\newcommand{\cstuname}[1]{\renewcommand{\@stuname}{#1}}
+
+\newcommand{\@sMajor}{Khoa học máy tính và thông tin}
+\newcommand{\csMajor}[1]{\renewcommand{\@sMajor}{#1}}
+
+\newcommand{\@sProgram}{Standard}
+\newcommand{\csProgram}[1]{\renewcommand{\@sProgram}{#1}}
+	
+\newcommand{\@sSupervise}{Dr. Nguyễn Văn A}
+\newcommand{\csSupervise}[1]{\renewcommand{\@sSupervise}{#1}}
+
+\newcommand{\@ttime}{\today}
+\newcommand{\cttime}[1]{\renewcommand{\@ttime}{#1}}
+
+\newcommand{\@rname}{Thiết kế và Đánh giá Thuật toán} % report name, luận văn, thực tập...
+\newcommand{\crname}[1]{\renewcommand{\@rname}{#1}}
+
+\newsavebox\thesmashminipage
+\newenvironment{smashminipage}
+  {\begin{lrbox}{\thesmashminipage}\begin{minipage}[t]{\textwidth}}
+  {\end{minipage}\end{lrbox}\smash{\usebox{\thesmashminipage}}\clearpage}
+
+\def\coverpage{
+\pagestyle{empty}
+% \setlength{\oddsidemargin}{0cm}
+% \addtolength{\voffset}{-2.5cm}
+% \addtolength{\textwidth}{-2cm}
+
+% \fbox{
+\begin{smashminipage}%[b][25.5cm][t]{15cm}
+\begin{tikzpicture}[remember picture, overlay]
+%   \draw[line width = 4pt] ($(current page.north west) + (1in,-1in)$) rectangle ($(current page.south east) + (-1in,1in)$);
+\draw [line width=1pt]
+    ($ (current page.north west) + (2.0cm,-2.0cm) $)
+    rectangle
+    ($ (current page.south east) + (-1.5cm,1.5cm) $);
+\draw [line width=3pt]
+    ($ (current page.north west) + (2.15cm,-2.15cm) $)
+    rectangle
+    ($ (current page.south east) + (-1.65cm,1.65cm) $); 
+\end{tikzpicture}
+
+\begin{center}
+{\fontsize{13}{1}\selectfont
+TRƯỜNG ĐẠI HỌC KHOA HỌC TỰ NHIÊN\\
+ĐẠI HỌC QUỐC GIA HÀ NỘI\\
+\textbf{\@sdeptname}
+}\\
+\vspace{3.5cm}
+{\fontsize{14}{1}\selectfont \textbf{\@stuname}}
+
+\vspace{2cm}
+
+  {\fontsize{18}{1}\selectfont \textbf{\@tname} }
+\vspace{5cm}  
+  
+ {\fontsize{14}{1}\selectfont \@rname  \\[6pt]
+ 	Chuyên ngành: \@sMajor \\[6pt]
+	%(\@sProgram\\ Program)\\ 
+     
+}
+ 
+\vspace{4.5cm}
+ 
+ {\fontsize{14}{1}\selectfont  \textbf{ Hà Nội - \@ttime } }\\
+
+\end{center}
+
+\end{smashminipage}
 }
 
-\newcommand{\secondcoverpage}{\coverpage}
 
-% Abstract environment override
-\providecommand{\abstractname}{Tóm tắt}
-\renewenvironment{abstract}{%
-  \clearpage
-  \begin{center}\textbf{\Large \abstractname}\end{center}
-  \vspace{0.5em}
-}{\clearpage}
+\def\secondcoverpage{
 
-% Nomenclature stubs (real macros from nomencl not bundled in this minimal
-% TeX install). \printnomenclature becomes a no-op.
-\providecommand{\nomenclature}[2]{}
-\providecommand{\printnomenclature}{}
-\providecommand{\makenomenclature}{}
+\pagestyle{empty}
+% \setlength{\oddsidemargin}{0cm}
+% \addtolength{\voffset}{-2.5cm}
+% \addtolength{\textwidth}{-2cm}
+
+% \fbox{
+\begin{smashminipage}%[b][25.5cm][t]{15cm}
+\begin{tikzpicture}[remember picture, overlay]
+%   \draw[line width = 4pt] ($(current page.north west) + (1in,-1in)$) rectangle ($(current page.south east) + (-1in,1in)$);
+\draw [line width=1pt]
+    ($ (current page.north west) + (3.0cm,-2.0cm) $)
+    rectangle
+    ($ (current page.south east) + (-1.5cm,1.5cm) $);
+\draw [line width=3pt]
+    ($ (current page.north west) + (3.15cm,-2.15cm) $)
+    rectangle
+    ($ (current page.south east) + (-1.65cm,1.65cm) $); 
+\end{tikzpicture}
+
+\begin{center}
+{\fontsize{13}{1}\selectfont
+TRƯỜNG ĐẠI HỌC KHOA HỌC TỰ NHIÊN\\
+ĐẠI HỌC QUỐC GIA HÀ NỘI\\
+\textbf{\@sdeptname}
+}\\
+\vspace{3.5cm}
+{\fontsize{14}{1}\selectfont \textbf{\@stuname}}
+
+\vspace{2cm}
+
+  {\fontsize{18}{1}\selectfont \textbf{\@tname} }
+\vspace{4cm}  
+  
+ {\fontsize{14}{1}\selectfont \@rname  \\[6pt]
+ 	Chuyên ngành: \@sMajor \\[6pt]
+%	(\@sProgram\ Program)\\ 
+     
+}
+\vspace{2cm}
+
+%{\fontsize{14}{1}\selectfont	\textbf{Supervisor:  %{\@sSupervise} \\	
+%}} 
+ 
+ 
+\vspace{4cm}
+ 
+ {\fontsize{14}{1}\selectfont \textbf{ Hà Nội - \@ttime } }\\
+
+\end{center}
+
+\end{smashminipage}
+}
+
+
+\def\makeprintversion{}
+
+%% Remember to load babel before loading this package or define the command \abstractname!
+%\makeatletter
+% \newenvironment{abstract}{
+%   \titlepage  \null\vfil
+%   \@beginparpenalty\@lowpenalty
+%   \begin{center}
+% 	\bfseries \Large Abstract
+% 	\@endparpenalty\@M
+%   \end{center}
+%   }
+% {\par\vfil\null\endtitlepage}
+%\makeatother
+
+% Declaration
+\makeatletter
+\renewenvironment{abstract}{
+ 	
+	\begin{center}
+ 	  {\Large\bfseries Abstract\vspace{-.5em}\vspace{\z@}}
+ 	\end{center}
+ 	\quotation
+   }{\vfil}
+\makeatother	  
+
+
+\makeatletter
+\newenvironment{acknowledgments}{
+	\titlepage \null\vfil
+	 
+	\begin{center}
+	  {\Large\bfseries {\fontsize{24}{1}\selectfont Acknowledgements } \vspace{-.5em}\vspace{\z@}}
+	\end{center}
+	\quotation
+  }{}
+\makeatother
+
+% Declaration
+% \makeatletter
+% \newenvironment{declaration}{
+ 	
+% 	\begin{center}
+%  	  {\Large\bfseries Declaration of Authorship\vspace{-.5em}\vspace{\z@}}
+%  	\end{center}
+%  	\quotation
+%    }{\vfil\null\endtitlepage}
+% \makeatother	  
+
+% \renewcommand\lstlistingname{Algorithm}
+% \renewcommand\lstlistlistingname{Algorithms}

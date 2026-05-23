@@ -1,36 +1,52 @@
-# LaTeX report
+# LaTeX Report — Final
 
-Báo cáo "Ứng dụng các mô hình quy hoạch tuyến tính cho các loại bài toán Knapsack"
+Báo cáo cuối kỳ "Ứng dụng các mô hình quy hoạch tuyến tính cho các loại bài toán Knapsack"
 của Nguyễn Hoàng Đạt, Lê Sỹ Thức, Nguyễn Hải Anh.
+
+Nội dung và assets đầy đủ (template + ảnh + logo) lấy từ bản zip mà tác giả gửi.
 
 ## Compile
 
 ```bash
 cd report
-xelatex main.tex
-xelatex main.tex   # second pass for ToC + references
+xelatex report.tex
+bibtex report
+xelatex report.tex
+xelatex report.tex
 ```
 
-Output: `main.pdf` (~19 pages).
+Output: `report.pdf` — **47 trang, ~6 MB**.
 
-## Các file local stubs (`*.sty`)
+## Bố cục
 
-Một số package mà repo phụ thuộc **không có trong TeX Live basic** mặc định.
-Để compile được standalone, repo bundle 4 stubs tối giản:
+- `report.tex` — toàn bộ nội dung báo cáo (preamble + 7 sections + bibliography)
+- `refs.bib` — references
+- `husthesis-en.sty` — HUST official thesis template (do tác giả cung cấp trong zip)
+- `image/` — 50+ ảnh thực nghiệm: quality, scatter, curvefit, sensitivity, memory comparison, runtime comparison
+- `logo/` — HUST logo cho cover page
 
-| File | Thay cho | Ghi chú |
+## Stubs cho TeX Live basic
+
+Một số package mà repo phụ thuộc không có trong TeX Live basic. Repo bundle stubs tối giản:
+
+| File | Thay cho | Vai trò |
 |------|----------|---------|
-| `husthesis-en.sty` | HUST official thesis class | Stub cover-page + layout cơ bản. Thay bằng file gốc nếu cần đúng format trường |
-| `enumitem.sty` | `enumitem` package | Hỗ trợ `[noitemsep]`, `[leftmargin=*]` no-op |
-| `algorithm2e.sty` | `algorithm2e` package | Stub các keyword + control flow + `\SetKwFunction` |
+| `vietnam.sty` | `vietnam` package | No-op (xelatex handle Unicode natively) |
+| `nomencl.sty` | `nomencl` package | Stub `\nomname`, `\printnomenclature`, `\makenomenclature` |
+| `multirow.sty` | `multirow` package | `\multirow{n}{w}{text}` → `text` |
+| `enumitem.sty` | `enumitem` package | No-op `[noitemsep]`, `[leftmargin=*]` keys |
+| `algorithm2e.sty` | `algorithm2e` package | Stub keywords + control flow + `\SetKwFunction` |
 | `placeins.sty` | `placeins` package | `\FloatBarrier` → `\clearpage` |
 
-Nếu hệ thống có sẵn các package này, LaTeX sẽ ưu tiên local stubs trong cùng
-thư mục. Để dùng package gốc thay vì stub, chỉ cần xóa các file `.sty` trong
-folder này.
+Khi hệ thống có sẵn các package đầy đủ, xóa các file `.sty` tương ứng để LaTeX dùng package gốc.
 
-## Placeholder images
+## Patches xelatex-friendly
 
-Tất cả ảnh trong `image/` hiện là **placeholder PNG 400×300 px**. Để có ảnh
-thật, cần generate qua các script trong repo (`data/quality.py`,
-`notebooks/execute_notebook.py`, `notebooks/plot_sensitivity.py`).
+Bản tex gốc dùng `pdflatex` với `\usepackage[utf8]{vietnam}` và `\usepackage[vietnamese]{babel}`.
+Để compile được với xelatex (Unicode native, font Vietnamese tốt hơn), preamble đã được patch:
+
+- `\usepackage[utf8,nocaptions]{vietnam}` → `\usepackage{fontspec}` + `\usepackage{polyglossia}` + `\setdefaultlanguage{vietnamese}`
+- `\usepackage[vietnamese]{babel}` → comment ra (polyglossia thay thế)
+- `\usepackage{mathptmx}` → comment ra (xung đột Unicode tiếng Việt)
+
+Nội dung body và 23 references không thay đổi.
