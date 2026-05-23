@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Knapsack Visualizer — Benchmark & Solver Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">KO</span>
+      <div>
+        <h1>Knapsack Optimization Visualizer</h1>
+        <p class="subtitle">Benchmark · So sánh · Solver trực tiếp · Dữ liệu chất lượng</p>
+      </div>
+    </div>
+    <nav class="modes">
+      <button class="mode-btn active" data-mode="dashboard">Dashboard</button>
+      <button class="mode-btn" data-mode="comparison">So sánh</button>
+      <button class="mode-btn" data-mode="solver">Single Solver</button>
+      <button class="mode-btn" data-mode="multi">Multi-Solver</button>
+      <button class="mode-btn" data-mode="custom">Custom Instance</button>
+      <button class="mode-btn" data-mode="quality">Data Quality</button>
+      <button class="mode-btn" data-mode="runner">Job Runner</button>
+    </nav>
+  </header>
+
+  <main id="app">
+    <!-- Mode panels -->
+    <section class="panel active" data-panel="dashboard">
+      <div class="panel-header">
+        <h2>Tổng quan benchmark</h2>
+        <div class="controls">
+          <label>File CSV
+            <select id="dash-file"></select>
+          </label>
+          <button id="dash-refresh">Tải lại</button>
+        </div>
+      </div>
+      <div class="cards" id="dash-cards"></div>
+      <div class="charts-grid">
+        <div class="chart-box"><h3>Tỷ lệ thành công theo thuật toán</h3><canvas id="dash-success"></canvas></div>
+        <div class="chart-box"><h3>Thời gian trung bình (s)</h3><canvas id="dash-time"></canvas></div>
+        <div class="chart-box"><h3>Bộ nhớ trung bình (MB)</h3><canvas id="dash-memory"></canvas></div>
+        <div class="chart-box wide"><h3>Thời gian theo N (heatmap-like)</h3><canvas id="dash-time-by-n"></canvas></div>
+      </div>
+      <div class="table-section">
+        <h3>Chi tiết theo thuật toán</h3>
+        <div id="dash-table"></div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="comparison">
+      <div class="panel-header">
+        <h2>So sánh 2 thuật toán</h2>
+        <div class="controls">
+          <select id="cmp-a"></select>
+          <span class="vs">vs</span>
+          <select id="cmp-b"></select>
+          <button id="cmp-run">So sánh</button>
+        </div>
+      </div>
+      <div class="cards" id="cmp-cards"></div>
+      <div class="charts-grid">
+        <div class="chart-box"><h3>Thời gian (paired scatter, log scale)</h3><canvas id="cmp-time"></canvas></div>
+        <div class="chart-box"><h3>Giá trị tối ưu (paired)</h3><canvas id="cmp-value"></canvas></div>
+        <div class="chart-box wide"><h3>Speedup (B/A) theo N</h3><canvas id="cmp-speedup"></canvas></div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="solver">
+      <div class="panel-header">
+        <h2>Chạy thử 1 thuật toán</h2>
+        <div class="controls">
+          <input type="text" id="solver-search" placeholder="Tìm instance..." />
+          <select id="solver-instance" size="6"></select>
+          <select id="solver-algo"></select>
+          <label>Timeout (s) <input type="number" id="solver-timeout" value="10" min="1" max="120" /></label>
+          <button id="solver-run">Run</button>
+        </div>
+      </div>
+      <div class="solver-layout">
+        <div class="card">
+          <h3>Thông tin instance</h3>
+          <div id="solver-instance-info">Chọn một instance…</div>
+        </div>
+        <div class="card">
+          <h3>Kết quả <span id="solver-live"></span></h3>
+          <div id="solver-result">Chưa chạy</div>
+          <div id="solver-cap-bar"></div>
+        </div>
+        <div class="card wide">
+          <h3>Phân bố items (weight × value)</h3>
+          <canvas id="solver-items-chart"></canvas>
+        </div>
+        <div class="card wide">
+          <h3>Items được chọn (sort theo density)</h3>
+          <details><summary>Hiện bảng</summary><div id="solver-items-table"></div></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="multi">
+      <div class="panel-header">
+        <h2>Chạy nhiều thuật toán trên 1 instance (streaming)</h2>
+        <div class="controls">
+          <input type="text" id="multi-search" placeholder="Tìm instance..." />
+          <select id="multi-instance"></select>
+          <label>Timeout (s) <input type="number" id="multi-timeout" value="10" min="1" max="120" /></label>
+          <button id="multi-run">Run tất cả</button>
+          <button id="multi-stop" style="background:var(--danger);display:none;">Stop</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Cấu hình thuật toán</h3>
+        <div id="multi-algos" class="checkbox-grid"></div>
+      </div>
+      <div class="card">
+        <h3>Tiến trình realtime <span id="multi-live"></span></h3>
+        <div id="multi-stream"></div>
+      </div>
+      <div class="charts-grid">
+        <div class="chart-box"><h3>Thời gian (s, log)</h3><canvas id="multi-time"></canvas></div>
+        <div class="chart-box"><h3>Bộ nhớ (MB)</h3><canvas id="multi-memory"></canvas></div>
+        <div class="chart-box"><h3>Optimal value</h3><canvas id="multi-value"></canvas></div>
+      </div>
+      <div id="multi-table"></div>
+    </section>
+
+    <section class="panel" data-panel="custom">
+      <div class="panel-header">
+        <h2>Custom Instance Builder</h2>
+        <div class="controls">
+          <label>Capacity <input type="number" id="custom-capacity" value="50" /></label>
+          <button id="custom-add-row">+ Thêm item</button>
+          <button id="custom-load-sample">Load sample</button>
+          <select id="custom-algo"></select>
+          <label>Timeout (s) <input type="number" id="custom-timeout" value="15" min="1" max="120" /></label>
+          <button id="custom-run">Run</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Sinh ngẫu nhiên instance (Gaussian + correlation control)</h3>
+        <div class="controls">
+          <label>N items <input type="number" id="rand-n" value="20" min="2" max="5000" /></label>
+          <label>max_weight <input type="number" id="rand-mw" value="100" min="1" max="100000" /></label>
+          <label>capacity_ratio <input type="number" id="rand-cr" value="0.5" min="0.05" max="0.95" step="0.05" /></label>
+          <label>pearson_r <input type="number" id="rand-pr" value="0.5" min="-0.95" max="0.95" step="0.05" /></label>
+          <label>seed <input type="number" id="rand-seed" placeholder="random" /></label>
+          <button id="rand-gen">Sinh</button>
+        </div>
+      </div>
+      <div class="custom-layout">
+        <div class="card">
+          <h3>Danh sách items</h3>
+          <details>
+            <summary id="custom-items-summary">Hiện bảng items</summary>
+            <table class="editable-table" id="custom-items">
+              <thead><tr><th>#</th><th>Weight</th><th>Value</th><th>Density</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </details>
+        </div>
+        <div class="card">
+          <h3>Kết quả</h3>
+          <div id="custom-result">Chưa chạy</div>
+          <div id="custom-cap-bar"></div>
+          <canvas id="custom-chart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="quality">
+      <div class="panel-header">
+        <h2>Data Quality & Scenarios</h2>
+        <div class="controls">
+          <button id="quality-refresh">Tải lại</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Test Scenarios cấu hình</h3>
+        <div id="quality-scenarios"></div>
+      </div>
+      <div class="card">
+        <h3>Biểu đồ chất lượng dữ liệu</h3>
+        <div id="quality-images" class="image-grid"></div>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="runner">
+      <div class="panel-header">
+        <h2>Job Runner</h2>
+        <div class="controls">
+          <button id="runner-refresh">Refresh</button>
+        </div>
+      </div>
+      <div class="runner-grid">
+        <div class="card">
+          <h3>Chạy benchmark mới</h3>
+          <label>Timeout (s) <input type="number" id="runner-bench-timeout" value="5" /></label>
+          <label>Limit instances (0=all) <input type="number" id="runner-bench-limit" value="0" /></label>
+          <label>Output filename <input type="text" id="runner-bench-output" placeholder="auto" /></label>
+          <button id="runner-bench-start">Bắt đầu</button>
+        </div>
+        <div class="card">
+          <h3>Sinh test data</h3>
+          <label>Seed <input type="number" id="runner-gen-seed" value="42" /></label>
+          <button id="runner-gen-start">Run generator</button>
+        </div>
+        <div class="card">
+          <h3>Phân tích chất lượng</h3>
+          <button id="runner-quality-start">Run quality.py</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Active jobs</h3>
+        <div id="runner-jobs"></div>
+      </div>
+      <div class="card">
+        <h3>Tiến trình</h3>
+        <div id="runner-progress-box">Chọn một job…</div>
+      </div>
+      <div class="card">
+        <h3>Log</h3>
+        <pre id="runner-log">Chọn một job…</pre>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>Powered by Flask + Chart.js · merged from main, Hoàng_Đạt, feature/data-generator</span></footer>
+
+  <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/comparison.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/solver.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/multi.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/quality.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/runner.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
