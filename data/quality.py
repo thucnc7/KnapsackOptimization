@@ -147,17 +147,39 @@ class TestcaseQualityAnalyzer:
     def _plot_scatter_anchor_vs_actual(self, out_dir, col_actual, col_anchor,
                                        title, label, filename):
         fig, ax = self._new_fig(8, 6)
-        ax.scatter(self.df[col_anchor], self.df[col_actual],
-                   s=18, alpha=0.55, color=ACCENT[0], linewidths=0)
-
-        lo = min(self.df[col_anchor].min(), self.df[col_actual].min())
-        hi = max(self.df[col_anchor].max(), self.df[col_actual].max())
-        margin = (hi - lo) * 0.05 if hi > lo else 1
-        ax.plot([lo - margin, hi + margin], [lo - margin, hi + margin],
-                "--", color=DIAG_CLR, lw=1.5, label="y = x (no jitter)")
+        
+        # Apply visual jitter to the x-axis (anchor values) to spread them out
+        rng = np.random.default_rng(42)
+        x_vals = self.df[col_anchor].to_numpy(dtype=float)
+        
+        if "ratio" in col_anchor:
+            # Spread capacity_ratio_anchor (0.1, 0.5, 0.9) slightly
+            x_jittered = x_vals + rng.uniform(-0.02, 0.02, size=len(x_vals))
+            ax.scatter(x_jittered, self.df[col_actual],
+                       s=18, alpha=0.55, color=ACCENT[0], linewidths=0)
+            
+            lo = min(self.df[col_anchor].min(), self.df[col_actual].min())
+            hi = max(self.df[col_anchor].max(), self.df[col_actual].max())
+            margin = (hi - lo) * 0.05 if hi > lo else 0.05
+            ax.plot([lo - margin, hi + margin], [lo - margin, hi + margin],
+                    "--", color=DIAG_CLR, lw=1.5, label="y = x")
+        else:
+            # Spread n_anchor (15, 30, ...) proportionally
+            x_jittered = x_vals + rng.uniform(-0.04, 0.04, size=len(x_vals)) * x_vals
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+            ax.scatter(x_jittered, self.df[col_actual],
+                       s=18, alpha=0.55, color=ACCENT[0], linewidths=0)
+            
+            lo = min(self.df[col_anchor].min(), self.df[col_actual].min())
+            hi = max(self.df[col_anchor].max(), self.df[col_actual].max())
+            lo_line = lo / 1.5
+            hi_line = hi * 1.5
+            ax.plot([lo_line, hi_line], [lo_line, hi_line],
+                    "--", color=DIAG_CLR, lw=1.5, label="y = x")
 
         self._legend(ax)
-        self._style(ax, title, f"{label} (anchor)", f"{label} (actual)")
+        self._style(ax, title, f"{label} (anchor, jittered for viz)", f"{label} (actual)")
         self._save(fig, out_dir, filename)
 
     def _plot_pearson_accuracy(self, out_dir, filename):
@@ -166,20 +188,23 @@ class TestcaseQualityAnalyzer:
         n_anchors = sorted(df["n_anchor"].unique())
         cmap = plt.colormaps["cool"].resampled(len(n_anchors))
 
+        rng = np.random.default_rng(42)
         for i, na in enumerate(n_anchors):
-            sub = df[df["n_anchor"] == na]
-            ax.scatter(sub["target_pearson_r"], sub["pearson_r"],
+            sub = df[df["n_anchor"] == na].copy()
+            # Apply visual jitter to target_pearson_r (0.0, 0.5, 0.95)
+            target_jittered = sub["target_pearson_r"] + rng.uniform(-0.02, 0.02, size=len(sub))
+            ax.scatter(target_jittered, sub["pearson_r"],
                        s=22, alpha=0.75, color=cmap(i), linewidths=0.3,
                        edgecolors=AX_BG, label=f"n={na}")
 
-        rng = [df["target_pearson_r"].min() - 0.05,
-               df["target_pearson_r"].max() + 0.05]
-        ax.plot(rng, rng, "--", color=DIAG_CLR, lw=1.5, label="Perfect accuracy")
-        ax.text(rng[1] - 0.02, rng[1] + 0.02, "y=x", color=DIAG_CLR, fontsize=9)
+        rng_line = [df["target_pearson_r"].min() - 0.05,
+                    df["target_pearson_r"].max() + 0.05]
+        ax.plot(rng_line, rng_line, "--", color=DIAG_CLR, lw=1.5, label="Perfect accuracy")
+        ax.text(rng_line[1] - 0.02, rng_line[1] + 0.02, "y=x", color=DIAG_CLR, fontsize=9)
 
         self._legend(ax, fontsize=8)
-        self._style(ax, "Target vs Actual Pearson r (colored by n)",
-                    "Target Pearson r", "Actual Pearson r")
+        self._style(ax, "Target vs Actual Pearson r (colored by n, jittered for viz)",
+                    "Target Pearson r (jittered)", "Actual Pearson r")
         self._save(fig, out_dir, filename)
 
     # ── Public API ────────────────────────────────────────────────────────────
