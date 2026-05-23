@@ -334,8 +334,10 @@ Tất cả đã được liệt kê trong `requirements.txt`.
 
 ## 👥 Tác giả
 
-- **Nguyễn Hoàng Đạt**
-- **Lê Sỹ Thức**
-- **Nguyễn Hải Anh**
+| Họ tên | Vai trò |
+|--------|---------|
+| **Nguyễn Hoàng Đạt** | Thiết kế và cài đặt Simplex family (Primal, Dual, Simplex + Branch & Bound, Gomory Cut) |
+| **Lê Sỹ Thức** | Thiết kế và cài đặt các thuật toán cơ bản (Greedy, Dynamic Programming, Backtracking, Branch & Bound) |
+| **Nguyễn Hải Anh** | Thiết kế trình sinh dữ liệu thực nghiệm (Gaussian jitter + rejection sampling theo hệ số tương quan Pearson) |
 
 Project này là sản phẩm hợp tác phục vụ mục đích nghiên cứu — học tập về Operations Research và Combinatorial Optimization.
