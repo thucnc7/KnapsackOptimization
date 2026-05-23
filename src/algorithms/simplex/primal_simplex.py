@@ -1,5 +1,8 @@
 import math
 from typing import List, Tuple, Dict, Any, Optional
+
+import numpy as np
+
 from src.models import KnapsackInstance, Item
 from src.algorithms.base import FractionalKnapsackMixin
 from src.algorithms.simplex.base_simplex import BaseSimplexSolver
@@ -23,160 +26,88 @@ class TwoPhaseTableau:
 
         self.num_art: int = len(self.art_rows)
 
-        # Construct Phase I Tableau
-        # Columns:
-        # - 0 to n-1: Decision variables
-        # - n to n+m-1: Slack/Surplus variables
-        # - n+m to n+m+num_art-1: Artificial variables
-        # - n+m+num_art: RHS
-        self.tableau: List[List[float]] = []
+        # Construct Phase I Tableau via numpy for vectorized pivots downstream.
+        # Columns: [decision (n) | slack (m) | artificial (num_art) | RHS (1)]
+        total_cols = self.n + self.m + self.num_art + 1
+        tableau = np.zeros((self.m + 1, total_cols), dtype=float)
         for i in range(self.m):
-            row = []
-            # Multiply by -1 if RHS is negative to maintain non-negative RHS in Phase I
             multiplier = -1.0 if i in self.row_to_art else 1.0
-
-            # Decision variables
-            row.extend([val * multiplier for val in A[i]])
-
-            # Slack/Surplus variables
-            slacks = [0.0] * self.m
-            slacks[i] = 1.0 * multiplier
-            row.extend(slacks)
-
-            # Artificial variables
-            arts = [0.0] * self.num_art
+            tableau[i, 0:self.n] = np.asarray(A[i], dtype=float) * multiplier
+            tableau[i, self.n + i] = 1.0 * multiplier
             if i in self.row_to_art:
-                art_idx = self.row_to_art[i]
-                arts[art_idx] = 1.0
-            row.extend(arts)
-
-            # RHS
-            row.append(b[i] * multiplier)
-            self.tableau.append(row)
+                tableau[i, self.n + self.m + self.row_to_art[i]] = 1.0
+            tableau[i, -1] = b[i] * multiplier
 
         # Initial basis setup
         self.basis: List[int] = []
         for i in range(self.m):
             if i in self.row_to_art:
-                # Artificial variable is basic
                 self.basis.append(self.n + self.m + self.row_to_art[i])
             else:
-                # Slack variable is basic
                 self.basis.append(self.n + i)
 
         # Construct Phase I auxiliary objective row: Maximize -sum(a_i)
-        phase1_obj = [0.0] * (self.n + self.m)
-        phase1_obj.extend([1.0] * self.num_art)
-        phase1_obj.append(0.0)
-        self.tableau.append(phase1_obj)
-
-        # Make the Phase I objective row canonical by eliminating basic artificial variables
-        for i in self.art_rows:
-            for col in range(len(self.tableau[-1])):
-                self.tableau[-1][col] -= self.tableau[i][col]
+        if self.num_art > 0:
+            tableau[-1, self.n + self.m:self.n + self.m + self.num_art] = 1.0
+            # Eliminate basic artificial variables from objective row (canonical form)
+            for i in self.art_rows:
+                tableau[-1] -= tableau[i]
+        self.tableau = tableau
 
     def pivot(self, row: int, col: int):
-        """
-        Pivots the tableau at cell (row, col) and updates basic variables.
-        Performs natural row operations on all columns and applies precision cleanup.
-        """
-        pivot_val = self.tableau[row][col]
-        # Divide pivot row by pivot value
-        self.tableau[row] = [val / pivot_val for val in self.tableau[row]]
-
-        num_rows = len(self.tableau)
-        for r in range(num_rows):
-            if r != row:
-                factor = self.tableau[r][col]
-                for c in range(len(self.tableau[r])):
-                    self.tableau[r][c] -= factor * self.tableau[row][c]
-
-        # Apply standard floating-point cleanups to prevent float precision drift
-        for r in range(len(self.tableau)):
-            for c in range(len(self.tableau[r])):
-                if abs(self.tableau[r][c]) < 1e-12:
-                    self.tableau[r][c] = 0.0
-                elif abs(self.tableau[r][c] - 1.0) < 1e-12:
-                    self.tableau[r][c] = 1.0
-
+        """Vectorized pivot: divide pivot row, then subtract multiples from other rows."""
+        pivot_val = self.tableau[row, col]
+        self.tableau[row] = self.tableau[row] / pivot_val
+        factors = self.tableau[:, col].copy()
+        factors[row] = 0.0
+        self.tableau -= np.outer(factors, self.tableau[row])
+        # Float precision cleanup — only the pivot column is guaranteed exact
+        self.tableau[row, col] = 1.0
+        self.tableau[:row, col] = 0.0
+        self.tableau[row + 1:, col] = 0.0
         self.basis[row] = col
 
-    def solve_primal(self, max_iterations: int = 1000) -> str:
-        """
-        Performs standard Primal Simplex iterations on the active tableau.
-        """
+    def solve_primal(self, max_iterations: int = 50000) -> str:
+        """Vectorized Primal Simplex iterations on the active tableau."""
         eps = 1e-9
-        num_rows = len(self.tableau)
-        obj_row_idx = num_rows - 1
-        
-        # Default active columns includes all variables except RHS. 
-        # Phase II will override this via self.active_cols to ignore artificial variables
+        obj_row_idx = self.tableau.shape[0] - 1
+
         if not hasattr(self, "active_cols"):
-            self.active_cols = len(self.tableau[0]) - 1
+            self.active_cols = self.tableau.shape[1] - 1
 
         for _ in range(max_iterations):
-            # Entering variable selection (most negative coefficient in objective row)
-            entering_col = -1
-            min_val = -eps
-            for c in range(self.active_cols):
-                if self.tableau[obj_row_idx][c] < min_val:
-                    min_val = self.tableau[obj_row_idx][c]
-                    entering_col = c
-
-            if entering_col == -1:
+            obj = self.tableau[obj_row_idx, :self.active_cols]
+            entering_col = int(np.argmin(obj))
+            if obj[entering_col] >= -eps:
                 return "optimal"
 
-            # Leaving variable selection (Primal ratio test)
-            leaving_row = -1
-            min_ratio = float('inf')
-            for r in range(obj_row_idx):
-                val = self.tableau[r][entering_col]
-                if val > eps:
-                    ratio = self.tableau[r][-1] / val
-                    if ratio < min_ratio:
-                        min_ratio = ratio
-                        leaving_row = r
-
-            if leaving_row == -1:
+            column = self.tableau[:obj_row_idx, entering_col]
+            rhs = self.tableau[:obj_row_idx, -1]
+            mask = column > eps
+            if not mask.any():
                 return "unbounded"
+            ratios = np.where(mask, rhs / np.where(mask, column, 1.0), np.inf)
+            leaving_row = int(np.argmin(ratios))
 
             self.pivot(leaving_row, entering_col)
 
         return "max_iterations"
 
     def transition_to_phase_two(self, c_orig: List[float]):
-        """
-        Replaces the Phase I objective function with the original objective function c_orig,
-        and restores canonical form. Retains artificial variables to handle degeneracy safely,
-        but limits active columns to prevent them from entering the basis.
-        """
-        # 1. Drop the Phase I objective row
-        self.tableau.pop()
+        """Replace Phase I objective with Phase II objective; restore canonical form."""
+        total_cols = self.tableau.shape[1]
+        phase2_obj = np.zeros(total_cols, dtype=float)
+        phase2_obj[:self.n] = -np.asarray(c_orig, dtype=float)
+        self.tableau[-1] = phase2_obj
 
-        # 2. Inject original objective row (Maximize original objective)
-        phase2_obj = []
-        phase2_obj.extend([-val for val in c_orig]) # Decision variables
-        phase2_obj.extend([0.0] * self.m)           # Slack variables
-        phase2_obj.extend([0.0] * self.num_art)     # Artificial variables (kept but deactivated)
-        phase2_obj.append(0.0)                      # RHS
-        self.tableau.append(phase2_obj)
-
-        # 3. Restore canonical form (basic variable coefficients in objective row must be 0)
+        # Restore canonical form: zero out objective-row coefficients of basic vars
         for i in range(self.m):
             basic_var = self.basis[i]
-            
-            factor = self.tableau[-1][basic_var]
+            factor = self.tableau[-1, basic_var]
             if abs(factor) > 1e-12:
-                for col in range(len(self.tableau[-1])):
-                    self.tableau[-1][col] -= factor * self.tableau[i][col]
-                    
-        # Apply standard floating-point cleanups
-        for c in range(len(self.tableau[-1])):
-            if abs(self.tableau[-1][c]) < 1e-12:
-                self.tableau[-1][c] = 0.0
+                self.tableau[-1] -= factor * self.tableau[i]
 
-        # 4. Define active columns to restrict entering variable selection
-        # (Only search over decision and slack variables, ignoring artificial variables)
+        # Ignore artificial variables when selecting entering column in Phase II
         self.active_cols = self.n + self.m
 
     def get_solution(self) -> List[float]:
@@ -184,11 +115,11 @@ class TwoPhaseTableau:
         for r in range(self.m):
             var_idx = self.basis[r]
             if var_idx < self.n:
-                sol[var_idx] = self.tableau[r][-1]
+                sol[var_idx] = float(self.tableau[r, -1])
         return sol
 
     def get_objective_value(self) -> float:
-        return self.tableau[-1][-1]
+        return float(self.tableau[-1, -1])
 
 
 class PrimalSimplexSolver(FractionalKnapsackMixin, BaseSimplexSolver):

@@ -84,98 +84,32 @@ class BaseSimplexSolver(BaseKnapsackSolver):
 
     def _filter_redundant_constraints(self, A: List[List[float]], b: List[float]) -> Tuple[List[List[float]], List[float]]:
         """
-        Uses Gaussian elimination to find and remove redundant complex linear combinations.
-        For inequality systems (Ax <= b), a constraint is redundant if it can be expressed
-        as a linear combination of other constraints with non-negative multipliers, and
-        the resulting combined RHS is tighter than or equal to its own RHS.
+        Remove duplicate constraints. For each unique coefficient pattern, keep the row
+        with the tightest RHS (smallest b for `Ax <= b`). Two constraints are duplicates
+        when their A-rows match coefficient-wise within `eps`.
+
+        This is a safe simplification of the original Gaussian-elimination redundancy
+        filter — for the Knapsack LP family (1 capacity row + n upper-bound rows of the
+        form `x_i <= b_i`), every row is a unique standard basis vector except when the
+        caller adds bounds for the same variable via `fixed_bounds`; in that case the
+        tightest bound wins. General LP redundancy detection has worst-case O(n*m^3)
+        cost and is unnecessary here.
         """
         if not A:
             return A, b
-            
-        n = len(A[0])
-        m = len(A)
-        eps = 1e-7
-        
-        filtered_A = []
-        filtered_b = []
-        
-        for i in range(m):
-            row_a = A[i]
-            val_b = b[i]
-            
-            num_basis = len(filtered_A)
-            if num_basis == 0:
-                filtered_A.append(row_a)
-                filtered_b.append(val_b)
-                continue
-                
-            # Augmented matrix for Gaussian elimination: F^T | row_a^T
-            # Size: n rows, num_basis + 1 columns
-            aug = []
-            for col in range(n):
-                aug_row = [filtered_A[k][col] for k in range(num_basis)]
-                aug_row.append(row_a[col])
-                aug.append(aug_row)
-                
-            # Perform Gaussian Elimination
-            rank = 0
-            pivot_cols = []
-            for col in range(num_basis):
-                # Find pivot
-                pivot_row = -1
-                max_val = eps
-                for r in range(rank, n):
-                    if abs(aug[r][col]) > max_val:
-                        max_val = abs(aug[r][col])
-                        pivot_row = r
-                
-                if pivot_row == -1:
-                    continue # Free variable
-                    
-                # Swap rows to bring pivot to current rank
-                aug[rank], aug[pivot_row] = aug[pivot_row], aug[rank]
-                
-                # Normalize pivot row
-                pivot_val = aug[rank][col]
-                for c in range(col, num_basis + 1):
-                    aug[rank][c] /= pivot_val
-                    
-                # Eliminate other rows
-                for r in range(n):
-                    if r != rank:
-                        factor = aug[r][col]
-                        for c in range(col, num_basis + 1):
-                            aug[r][c] -= factor * aug[rank][c]
-                            
-                pivot_cols.append(col)
-                rank += 1
-                
-            # Check if the system is consistent (i.e. row_a is a linear combination of F)
-            is_dependent = True
-            for r in range(rank, n):
-                if abs(aug[r][-1]) > eps:
-                    is_dependent = False
-                    break
-                    
-            if is_dependent:
-                # Extract the multipliers y
-                y = [0.0] * num_basis
-                for k, p_col in enumerate(pivot_cols):
-                    y[p_col] = aug[k][-1]
-                    
-                # For inequalities, the combination is valid ONLY IF all multipliers are >= 0
-                all_non_negative = all(val >= -eps for val in y)
-                
-                if all_non_negative:
-                    # Check the RHS bound tightness
-                    combined_rhs = sum(y[k] * filtered_b[k] for k in range(num_basis))
-                    if combined_rhs <= val_b + eps:
-                        # The constraint is mathematically redundant, skip adding it
-                        continue
-            
-            # Keep the constraint if it is not redundant
-            filtered_A.append(row_a)
-            filtered_b.append(val_b)
-            
-        return filtered_A, filtered_b
+
+        eps = 1e-9
+
+        def _key(row: List[float]) -> Tuple[int, ...]:
+            return tuple(round(val / eps) for val in row)
+
+        tightest: Dict[Tuple[int, ...], int] = {}
+        for idx, row in enumerate(A):
+            key = _key(row)
+            prev = tightest.get(key)
+            if prev is None or b[idx] < b[prev] - eps:
+                tightest[key] = idx
+
+        kept = sorted(tightest.values())
+        return [A[i] for i in kept], [b[i] for i in kept]
 
