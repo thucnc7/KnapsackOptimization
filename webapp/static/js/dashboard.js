@@ -8,7 +8,7 @@ const Dashboard = {
     if (files.length === 0) {
       fileSelect.innerHTML = '<option>(không có file CSV)</option>';
     } else {
-      const defaultName = 'benchmark_results_timeout5.csv';
+      const defaultName = 'benchmark_results.csv';
       files.forEach((f) => {
         const opt = document.createElement('option');
         opt.value = f.name;

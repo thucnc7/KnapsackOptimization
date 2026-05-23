@@ -22,7 +22,8 @@ const Comparison = {
   async run() {
     const a = document.getElementById('cmp-a').value;
     const b = document.getElementById('cmp-b').value;
-    const data = await Utils.fetchJson(`/api/benchmark/compare?a=${a}&b=${b}`);
+    const file = document.getElementById('dash-file').value || '';
+    const data = await Utils.fetchJson(`/api/benchmark/compare?a=${a}&b=${b}&file=${encodeURIComponent(file)}`);
     Comparison.render(data);
   },
 

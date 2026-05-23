@@ -81,7 +81,7 @@ def _count_rows(path: Path) -> int:
 
 @bp.route("/raw", methods=["GET"])
 def raw_rows():
-    filename = request.args.get("file", "benchmark_results_timeout5.csv")
+    filename = request.args.get("file", "benchmark_results.csv")
     algorithm = request.args.get("algorithm")
     status = request.args.get("status")
     limit = int(request.args.get("limit", 0) or 0)
@@ -98,7 +98,7 @@ def raw_rows():
 
 @bp.route("/summary", methods=["GET"])
 def summary():
-    filename = request.args.get("file", "benchmark_results_timeout5.csv")
+    filename = request.args.get("file", "benchmark_results.csv")
     rows = _load_csv(filename)
     if not rows:
         return jsonify({"algorithms": [], "totals": {}, "by_algorithm": {}, "by_n": {}})
@@ -179,7 +179,7 @@ def summary():
 @bp.route("/compare", methods=["GET"])
 def compare():
     """Return paired results for two algorithms on the same test_id."""
-    filename = request.args.get("file", "benchmark_results_timeout5.csv")
+    filename = request.args.get("file", "benchmark_results.csv")
     a = request.args.get("a")
     b = request.args.get("b")
     if not a or not b:
