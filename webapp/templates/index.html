@@ -17,15 +17,64 @@
       </div>
     </div>
     <nav class="modes">
-      <button class="mode-btn active" data-mode="dashboard">Dashboard</button>
-      <button class="mode-btn" data-mode="comparison">So sánh</button>
-      <button class="mode-btn" data-mode="solver">Single Solver</button>
-      <button class="mode-btn" data-mode="multi">Multi-Solver</button>
-      <button class="mode-btn" data-mode="custom">Custom Instance</button>
-      <button class="mode-btn" data-mode="quality">Data Quality</button>
-      <button class="mode-btn" data-mode="runner">Job Runner</button>
+      <button class="mode-btn active" data-mode="dashboard" title="Tổng quan kết quả benchmark CSV">Dashboard</button>
+      <button class="mode-btn" data-mode="comparison" title="So sánh paired 2 thuật toán trên cùng instances">So sánh</button>
+      <button class="mode-btn" data-mode="solver" title="Chạy 1 thuật toán trên 1 instance">Single Solver</button>
+      <button class="mode-btn" data-mode="multi" title="Streaming nhiều thuật toán trên cùng 1 instance">Multi-Solver</button>
+      <button class="mode-btn" data-mode="custom" title="Builder thủ công hoặc sinh ngẫu nhiên instance">Custom Instance</button>
+      <button class="mode-btn" data-mode="sensitivity" title="Phân tích độ nhạy: warm-start Dual Simplex vs solve from scratch">Sensitivity</button>
+      <button class="mode-btn" data-mode="quality" title="Phân phối dữ liệu testcases">Data Quality</button>
+      <button class="mode-btn" data-mode="runner" title="Spawn jobs background: benchmark, generator, quality">Job Runner</button>
     </nav>
+    <button id="help-btn" class="help-btn" title="Hướng dẫn sử dụng">?</button>
   </header>
+
+  <!-- First-time welcome modal -->
+  <div id="welcome-modal" class="modal" style="display:none;">
+    <div class="modal-backdrop"></div>
+    <div class="modal-body">
+      <h2>👋 Chào mừng đến với Knapsack Visualizer</h2>
+      <p class="lead">Webapp này có 8 chế độ chạy. Bấm vào tên để biết mode đó làm gì:</p>
+      <div class="mode-tour">
+        <div class="tour-item" data-jump="dashboard">
+          <span class="tour-icon">📊</span>
+          <div><strong>Dashboard</strong><br><small>Tổng quan CSV benchmark — success/timeout, time/memory theo thuật toán, biểu đồ thời gian theo N</small></div>
+        </div>
+        <div class="tour-item" data-jump="comparison">
+          <span class="tour-icon">⚖️</span>
+          <div><strong>So sánh</strong><br><small>Chọn 2 thuật toán bất kỳ → scatter log-log, speedup theo N, value khớp/lệch</small></div>
+        </div>
+        <div class="tour-item" data-jump="solver">
+          <span class="tour-icon">▶️</span>
+          <div><strong>Single Solver</strong><br><small>Chạy 1 thuật toán live trên 1 instance với timeout cấu hình được. Hiển thị banner đếm thời gian + items được chọn</small></div>
+        </div>
+        <div class="tour-item" data-jump="multi">
+          <span class="tour-icon">🚀</span>
+          <div><strong>Multi-Solver</strong><br><small>Streaming nhiều thuật toán cùng 1 instance, status update realtime mỗi 250ms</small></div>
+        </div>
+        <div class="tour-item" data-jump="custom">
+          <span class="tour-icon">🛠️</span>
+          <div><strong>Custom Instance</strong><br><small>Builder thủ công hoặc sinh ngẫu nhiên với config: n, max_weight, capacity_ratio, Pearson r</small></div>
+        </div>
+        <div class="tour-item" data-jump="sensitivity">
+          <span class="tour-icon">🔁</span>
+          <div><strong>Sensitivity</strong><br><small>Phân tích warm-start Dual Simplex — chứng minh tại sao có Dual Simplex (speedup hàng nghìn lần)</small></div>
+        </div>
+        <div class="tour-item" data-jump="quality">
+          <span class="tour-icon">📈</span>
+          <div><strong>Data Quality</strong><br><small>Test scenarios config + biểu đồ phân phối dữ liệu sinh ra</small></div>
+        </div>
+        <div class="tour-item" data-jump="runner">
+          <span class="tour-icon">⚙️</span>
+          <div><strong>Job Runner</strong><br><small>Chạy nền benchmark, generator, quality.py với log streaming + progress bar</small></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <label class="dont-show"><input type="checkbox" id="welcome-dontshow" /> Không hiện lại lần sau</label>
+        <button id="welcome-close" class="primary">Bắt đầu khám phá</button>
+      </div>
+    </div>
+  </div>
 
   <main id="app">
     <!-- Mode panels -->
@@ -39,6 +88,10 @@
           <button id="dash-refresh">Tải lại</button>
         </div>
       </div>
+      <p class="panel-intro">
+        Aggregates từ file CSV trong <code>results/csv/</code>. Mỗi row là một lần chạy
+        <code>(test_id, algorithm)</code>. Chọn file ở dropdown để xem dataset khác.
+      </p>
       <div class="cards" id="dash-cards"></div>
       <div class="charts-grid">
         <div class="chart-box"><h3>Tỷ lệ thành công theo thuật toán</h3><canvas id="dash-success"></canvas></div>
@@ -62,6 +115,10 @@
           <button id="cmp-run">So sánh</button>
         </div>
       </div>
+      <p class="panel-intro">
+        Paired comparison: chỉ tính các instances mà <strong>cả 2 thuật toán đều SUCCESS</strong>.
+        Lý tưởng để xem speedup hoặc value match-rate.
+      </p>
       <div class="cards" id="cmp-cards"></div>
       <div class="charts-grid">
         <div class="chart-box"><h3>Thời gian (paired scatter, log scale)</h3><canvas id="cmp-time"></canvas></div>
@@ -81,6 +138,10 @@
           <button id="solver-run">Run</button>
         </div>
       </div>
+      <p class="panel-intro">
+        Chạy 1 thuật toán live trên 1 instance. Timeout dùng multiprocessing — quá hạn worker sẽ terminate sạch không kẹt server.
+        Banner spinner đếm thời gian + progress bar budget hiển thị trong khi chạy.
+      </p>
       <div class="solver-layout">
         <div class="card">
           <h3>Thông tin instance</h3>
@@ -100,6 +161,26 @@
           <details><summary>Hiện bảng</summary><div id="solver-items-table"></div></details>
         </div>
       </div>
+
+      <!-- Simplex-only: trace visualization -->
+      <div id="solver-trace-section" style="display:none;">
+        <h3 style="margin-top:24px;border-top:1px solid var(--border);padding-top:18px;">
+          🔬 Simplex trace — bên trong thuật toán
+          <span class="panel-help">Hiển thị các giá trị quan trọng mỗi pivot iteration</span>
+        </h3>
+        <div class="cards" id="solver-trace-cards"></div>
+        <div class="charts-grid">
+          <div class="chart-box wide"><h3>Objective evolution qua iterations</h3><canvas id="solver-trace-obj"></canvas></div>
+          <div class="chart-box"><h3>Số decision variables trong basis</h3><canvas id="solver-trace-basis-count"></canvas></div>
+          <div class="chart-box"><h3>Entering / Leaving column per iteration</h3><canvas id="solver-trace-pivot-cols"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Pivot history</h3>
+          <details><summary id="solver-trace-history-summary">Hiện chi tiết</summary>
+            <div id="solver-trace-history" style="max-height:400px;overflow:auto;"></div>
+          </details>
+        </div>
+      </div>
     </section>
 
     <section class="panel" data-panel="multi">
@@ -113,6 +194,10 @@
           <button id="multi-stop" style="background:var(--danger);display:none;">Stop</button>
         </div>
       </div>
+      <p class="panel-intro">
+        Streaming NDJSON: nhiều thuật toán chạy tuần tự trên cùng instance, mỗi 250ms emit <code>tick</code> để UI
+        cập nhật badge realtime. Có thể bấm <strong>Stop</strong> để abort giữa chừng.
+      </p>
       <div class="card">
         <h3>Cấu hình thuật toán</h3>
         <div id="multi-algos" class="checkbox-grid"></div>
@@ -141,6 +226,10 @@
           <button id="custom-run">Run</button>
         </div>
       </div>
+      <p class="panel-intro">
+        Tự build instance hoặc sinh ngẫu nhiên với config (n, max_weight, capacity_ratio, target Pearson r, seed).
+        Hữu ích để test edge cases và ngoài dải benchmark sẵn.
+      </p>
       <div class="card">
         <h3>Sinh ngẫu nhiên instance (Gaussian + correlation control)</h3>
         <div class="controls">
@@ -172,6 +261,35 @@
       </div>
     </section>
 
+    <section class="panel" data-panel="sensitivity">
+      <div class="panel-header">
+        <h2>Sensitivity Analysis — Warm-start Dual Simplex</h2>
+        <div class="controls">
+          <button id="sens-refresh">Tải lại</button>
+        </div>
+      </div>
+      <p class="panel-intro">
+        Khi instance bị thay đổi nhỏ (capacity, value, hoặc thêm constraint mới), <strong>Dual Simplex</strong> có thể
+        warm-start từ optimal tableau cũ thay vì giải lại từ đầu. Phân tích này so sánh wall-time + iterations giữa 2 phương án
+        <em>resolve-from-scratch</em> và <em>warm-start</em> trên 600 runs (200 instances × 3 scenarios).
+      </p>
+      <div class="cards" id="sens-cards"></div>
+      <div class="charts-grid">
+        <div class="chart-box"><h3>Speedup distribution theo scenario (log scale)</h3><canvas id="sens-speedup-hist"></canvas></div>
+        <div class="chart-box"><h3>Time scratch vs warm (log-log)</h3><canvas id="sens-time-scatter"></canvas></div>
+        <div class="chart-box"><h3>Iterations theo scenario</h3><canvas id="sens-iter"></canvas></div>
+        <div class="chart-box"><h3>Win rate theo scenario</h3><canvas id="sens-win-rate"></canvas></div>
+      </div>
+      <div class="table-section">
+        <h3>Tóm tắt theo scenario</h3>
+        <div id="sens-table"></div>
+      </div>
+      <div class="card">
+        <h3>Biểu đồ static (sinh từ <code>plot_sensitivity.py</code>)</h3>
+        <div id="sens-static-imgs" class="image-grid"></div>
+      </div>
+    </section>
+
     <section class="panel" data-panel="quality">
       <div class="panel-header">
         <h2>Data Quality & Scenarios</h2>
@@ -179,6 +297,10 @@
           <button id="quality-refresh">Tải lại</button>
         </div>
       </div>
+      <p class="panel-intro">
+        Hiển thị cấu hình test scenarios (<code>data/test_scenarios.json</code>) và các biểu đồ chất lượng đã sinh
+        bằng <code>data/quality.py</code>. Nếu chưa có biểu đồ, sang tab <strong>Job Runner</strong> để run quality.py.
+      </p>
       <div class="card">
         <h3>Test Scenarios cấu hình</h3>
         <div id="quality-scenarios"></div>
@@ -196,6 +318,10 @@
           <button id="runner-refresh">Refresh</button>
         </div>
       </div>
+      <p class="panel-intro">
+        Spawn nền các script Python (<code>benchmark/runner.py</code>, <code>data/generator.py</code>, <code>data/quality.py</code>)
+        với log streaming + tqdm progress bar parse từ output. Hữu ích để chạy benchmark dài hạn mà không khoá UI.
+      </p>
       <div class="runner-grid">
         <div class="card">
           <h3>Chạy benchmark mới</h3>
@@ -238,6 +364,7 @@
   <script src="{{ url_for('static', filename='js/multi.js') }}"></script>
   <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
   <script src="{{ url_for('static', filename='js/quality.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/sensitivity.js') }}"></script>
   <script src="{{ url_for('static', filename='js/runner.js') }}"></script>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

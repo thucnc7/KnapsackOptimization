@@ -176,6 +176,96 @@ def summary():
     })
 
 
+@bp.route("/sensitivity", methods=["GET"])
+def sensitivity():
+    """Return aggregates + raw rows from sensitivity_results.csv (warm-start study)."""
+    import statistics
+    filename = request.args.get("file", "sensitivity_results.csv")
+    target = _csv_dir() / filename
+    if not target.exists():
+        return jsonify({"rows": [], "by_scenario": {}, "totals": {}, "available": False,
+                        "hint": "Chạy `python benchmark/sensitivity_runner.py` để sinh file này."})
+    rows: List[Dict[str, Any]] = []
+    with target.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            coerced: Dict[str, Any] = dict(row)
+            for key in ("n", "iter_scratch", "iter_warm"):
+                try:
+                    coerced[key] = int(row[key])
+                except (KeyError, ValueError, TypeError):
+                    coerced[key] = None
+            for key in ("time_scratch_sec", "time_warm_sec", "speedup"):
+                try:
+                    coerced[key] = float(row[key])
+                except (KeyError, ValueError, TypeError):
+                    coerced[key] = None
+            rows.append(coerced)
+
+    by_scenario: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        sc = r.get("scenario", "?")
+        bucket = by_scenario.setdefault(sc, {
+            "count": 0, "warm_wins": 0,
+            "speedups": [], "time_scratch": [], "time_warm": [],
+            "iter_scratch": [], "iter_warm": [],
+        })
+        bucket["count"] += 1
+        sp = r.get("speedup")
+        if isinstance(sp, (int, float)):
+            bucket["speedups"].append(sp)
+            if sp > 1.0:
+                bucket["warm_wins"] += 1
+        for src, dst in (("time_scratch_sec", "time_scratch"),
+                         ("time_warm_sec", "time_warm"),
+                         ("iter_scratch", "iter_scratch"),
+                         ("iter_warm", "iter_warm")):
+            v = r.get(src)
+            if isinstance(v, (int, float)):
+                bucket[dst].append(v)
+
+    def _stats(vals):
+        if not vals:
+            return {"mean": None, "median": None, "max": None, "min": None}
+        return {
+            "mean": round(statistics.mean(vals), 4),
+            "median": round(statistics.median(vals), 4),
+            "max": round(max(vals), 4),
+            "min": round(min(vals), 4),
+        }
+
+    summary_by_scenario: Dict[str, Any] = {}
+    all_speedups: List[float] = []
+    all_warm_wins = 0
+    total_count = 0
+    for sc, b in by_scenario.items():
+        summary_by_scenario[sc] = {
+            "count": b["count"],
+            "warm_wins": b["warm_wins"],
+            "warm_win_rate": round(b["warm_wins"] / b["count"], 4) if b["count"] else 0,
+            "speedup": _stats(b["speedups"]),
+            "time_scratch": _stats(b["time_scratch"]),
+            "time_warm": _stats(b["time_warm"]),
+            "iter_scratch": _stats(b["iter_scratch"]),
+            "iter_warm": _stats(b["iter_warm"]),
+        }
+        all_speedups.extend(b["speedups"])
+        all_warm_wins += b["warm_wins"]
+        total_count += b["count"]
+
+    return jsonify({
+        "available": True,
+        "rows": rows,
+        "by_scenario": summary_by_scenario,
+        "totals": {
+            "count": total_count,
+            "warm_wins": all_warm_wins,
+            "warm_win_rate": round(all_warm_wins / total_count, 4) if total_count else 0,
+            "speedup": _stats(all_speedups),
+        },
+    })
+
+
 @bp.route("/compare", methods=["GET"])
 def compare():
     """Return paired results for two algorithms on the same test_id."""

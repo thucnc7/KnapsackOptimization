@@ -213,6 +213,78 @@ footer { text-align: center; padding: 18px; color: var(--text-dim); font-size: 1
 }
 .timeout-bar .fill.warn { background: linear-gradient(90deg, var(--warning), var(--danger)); }
 
+/* Panel intro line */
+.panel-intro {
+  background: var(--surface-2); border-left: 3px solid var(--primary);
+  padding: 10px 14px; border-radius: 6px; font-size: 13px; color: var(--text);
+  margin: 0 0 16px; line-height: 1.55;
+}
+.panel-intro code {
+  background: var(--bg); padding: 1px 6px; border-radius: 3px;
+  font-size: 12px; color: var(--accent);
+}
+.panel-help {
+  font-size: 11px; color: var(--text-dim); padding: 4px 10px;
+  background: var(--surface-2); border-radius: 4px;
+}
+
+/* Help button (top right) */
+.help-btn {
+  position: fixed; top: 12px; right: 16px; z-index: 60;
+  width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font-size: 16px; font-weight: bold;
+  cursor: pointer; transition: all 0.15s;
+}
+.help-btn:hover { background: var(--primary); border-color: var(--primary); color: white; }
+
+/* Welcome modal */
+.modal {
+  position: fixed; inset: 0; z-index: 100; display: none;
+  align-items: center; justify-content: center; padding: 20px;
+}
+.modal-backdrop {
+  position: absolute; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px);
+}
+.modal-body {
+  position: relative; max-width: 720px; width: 100%; max-height: 90vh; overflow: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 12px 50px rgba(0, 0, 0, 0.5); padding: 28px;
+  animation: modalIn 0.25s ease;
+}
+@keyframes modalIn { from { opacity: 0; transform: translateY(20px) scale(0.97); } to { opacity: 1; transform: none; } }
+.modal-body h2 { margin: 0 0 10px; font-size: 22px; }
+.modal-body .lead { color: var(--text-dim); margin: 0 0 18px; font-size: 14px; }
+
+.mode-tour { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+.tour-item {
+  display: flex; gap: 12px; padding: 12px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+  transition: all 0.15s;
+}
+.tour-item:hover {
+  background: rgba(79, 158, 255, 0.1); border-color: var(--primary);
+  transform: translateY(-2px);
+}
+.tour-item .tour-icon { font-size: 24px; line-height: 1; }
+.tour-item strong { font-size: 13px; }
+.tour-item small { color: var(--text-dim); font-size: 11px; line-height: 1.4; }
+
+.modal-actions {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.dont-show { font-size: 12px; color: var(--text-dim); display: flex; gap: 6px; align-items: center; }
+.modal-actions button.primary {
+  background: var(--primary); color: white; border: none;
+  padding: 10px 22px; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 500;
+}
+.modal-actions button.primary:hover { background: var(--primary-hover); }
+
+@media (max-width: 600px) {
+  .mode-tour { grid-template-columns: 1fr; }
+  .modal-body { padding: 18px; }
+}
+
 .stream-row {
   display: grid; grid-template-columns: 140px 90px 1fr 100px 100px;
   gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--border);

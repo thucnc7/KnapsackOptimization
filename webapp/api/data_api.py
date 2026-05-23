@@ -146,10 +146,13 @@ def random_instance():
 @bp.route("/static-image/<category>/<filename>", methods=["GET"])
 def static_image(category: str, filename: str):
     from flask import send_from_directory
+    from pathlib import Path
     if category == "quality":
         directory = current_app.config["RESULTS_QUALITY_DIR"]
     elif category == "plots":
         directory = current_app.config["RESULTS_PLOTS_DIR"]
+    elif category == "sensitivity":
+        directory = str(Path(current_app.config["RESULTS_PLOTS_DIR"]) / "sensitivity")
     else:
         return ("not found", 404)
     return send_from_directory(directory, filename)

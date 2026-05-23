@@ -32,7 +32,92 @@ def _load_payload(instance_id: str, custom: Dict[str, Any]) -> Dict[str, Any]:
     return custom
 
 
-def _worker(payload: Dict[str, Any], algorithm_name: str, queue: mp.Queue) -> None:
+SIMPLEX_ALGORITHMS = {"PrimalSimplex", "DualSimplex", "SimplexBnB", "GomoryCut"}
+
+
+def _install_simplex_tracer():
+    """Monkey-patch Simplex tableau pivot to record per-iteration snapshots.
+
+    Returns a (trace_list, restore_fn) tuple. Caller must invoke restore_fn after solve.
+    """
+    from src.algorithms.simplex.primal_simplex import TwoPhaseTableau
+    from src.algorithms.simplex.dual_simplex import SimplexTableau
+
+    trace: List[Dict[str, Any]] = []
+    phase_marker = {"phase": "phase1"}  # mutable so the patched fn can read
+
+    orig_two_phase_pivot = TwoPhaseTableau.pivot
+    orig_two_phase_transition = TwoPhaseTableau.transition_to_phase_two
+    orig_simplex_pivot = SimplexTableau.pivot
+
+    def two_phase_pivot(self, row, col):
+        pre_obj = float(self.tableau[-1, -1])
+        orig_two_phase_pivot(self, row, col)
+        trace.append({
+            "phase": phase_marker["phase"],
+            "iter": len(trace),
+            "leaving_row": int(row),
+            "entering_col": int(col),
+            "leaving_var": int(self.basis[row]) if row < len(self.basis) else None,
+            "objective": float(self.tableau[-1, -1]),
+            "pre_objective": pre_obj,
+            "n_basis_decision": int(sum(1 for b in self.basis if b < self.n)),
+            "basis_decision_ids": [int(b) for b in self.basis if b < self.n],
+        })
+
+    def two_phase_transition(self, c_orig):
+        phase_marker["phase"] = "phase2"
+        trace.append({"phase": "transition", "iter": len(trace),
+                      "marker": "Phase I → Phase II"})
+        orig_two_phase_transition(self, c_orig)
+
+    def simplex_pivot(self, row, col):
+        pre_obj = float(self.tableau[-1, -1])
+        orig_simplex_pivot(self, row, col)
+        trace.append({
+            "phase": "simplex",
+            "iter": len(trace),
+            "leaving_row": int(row),
+            "entering_col": int(col),
+            "leaving_var": int(self.basis[row]) if row < len(self.basis) else None,
+            "objective": float(self.tableau[-1, -1]),
+            "pre_objective": pre_obj,
+            "n_basis_decision": int(sum(1 for b in self.basis if b < self.n)),
+            "basis_decision_ids": [int(b) for b in self.basis if b < self.n],
+        })
+
+    TwoPhaseTableau.pivot = two_phase_pivot
+    TwoPhaseTableau.transition_to_phase_two = two_phase_transition
+    SimplexTableau.pivot = simplex_pivot
+
+    def restore():
+        TwoPhaseTableau.pivot = orig_two_phase_pivot
+        TwoPhaseTableau.transition_to_phase_two = orig_two_phase_transition
+        SimplexTableau.pivot = orig_simplex_pivot
+
+    return trace, restore
+
+
+def _extract_lp_shape(algo) -> Dict[str, Any]:
+    """Pull LP dimensions from the solver's final tableau (numpy ndarray)."""
+    tab_obj = getattr(algo, "tableau", None)
+    if tab_obj is None:
+        return {}
+    arr = getattr(tab_obj, "tableau", None)
+    if arr is None:
+        return {}
+    return {
+        "rows": int(arr.shape[0]),
+        "cols": int(arr.shape[1]),
+        "n_decision": int(getattr(tab_obj, "n", 0)),
+        "n_constraints": int(getattr(tab_obj, "m", 0)),
+        "n_artificial": int(getattr(tab_obj, "num_art", 0)),
+        "final_objective": float(arr[-1, -1]),
+    }
+
+
+def _worker(payload: Dict[str, Any], algorithm_name: str, queue: mp.Queue,
+            with_trace: bool = False) -> None:
     """Child-process entry point — runs the algorithm and pushes a serializable result."""
     import tracemalloc
     from benchmark.runner import _run_algorithm, _normalize_knapsack_type, get_algorithm_registry
@@ -53,15 +138,24 @@ def _worker(payload: Dict[str, Any], algorithm_name: str, queue: mp.Queue) -> No
         knapsack_type = getattr(algo, "target_knapsack_type", spec.target_knapsack_type)
         normalized = _normalize_knapsack_type(knapsack_type)
 
+        trace: List[Dict[str, Any]] = []
+        restore = None
+        if with_trace and algorithm_name in SIMPLEX_ALGORITHMS:
+            trace, restore = _install_simplex_tracer()
+
         tracemalloc.start()
         start = time.perf_counter()
-        result = _run_algorithm(algo, instance, knapsack_type)
+        try:
+            result = _run_algorithm(algo, instance, knapsack_type)
+        finally:
+            if restore is not None:
+                restore()
         elapsed = time.perf_counter() - start
         _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
         selected, optimal_value = _extract_solution(algo, result, normalized)
-        queue.put({
+        out = {
             "status": "SUCCESS",
             "knapsack_type": normalized,
             "time_sec": round(elapsed, 6),
@@ -70,7 +164,11 @@ def _worker(payload: Dict[str, Any], algorithm_name: str, queue: mp.Queue) -> No
             "selected": selected,
             "n": len(instance.items),
             "capacity": instance.capacity,
-        })
+        }
+        if with_trace and algorithm_name in SIMPLEX_ALGORITHMS:
+            out["trace"] = trace
+            out["lp_shape"] = _extract_lp_shape(algo)
+        queue.put(out)
     except Exception as exc:  # pylint: disable=broad-except
         queue.put({"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"})
 
@@ -100,10 +198,11 @@ def _extract_solution(algo, result, normalized) -> tuple[List[Dict[str, Any]], f
     return selected, optimal_value
 
 
-def _execute_with_timeout(payload: Dict[str, Any], algorithm_name: str, timeout_sec: float) -> Dict[str, Any]:
+def _execute_with_timeout(payload: Dict[str, Any], algorithm_name: str, timeout_sec: float,
+                          with_trace: bool = False) -> Dict[str, Any]:
     """Run a single algorithm in a worker process with a time budget."""
     queue: mp.Queue = mp.Queue()
-    proc = mp.Process(target=_worker, args=(payload, algorithm_name, queue))
+    proc = mp.Process(target=_worker, args=(payload, algorithm_name, queue, with_trace))
     proc.daemon = True
     proc.start()
     proc.join(timeout=timeout_sec)
@@ -150,6 +249,7 @@ def run():
     algorithm_name = body.get("algorithm")
     instance_id = body.get("instance_id")
     custom = body.get("instance")
+    with_trace = bool(body.get("trace", False))
     timeout_sec = float(body.get("timeout", DEFAULT_TIMEOUT_SEC) or DEFAULT_TIMEOUT_SEC)
     timeout_sec = max(0.5, min(timeout_sec, 3600.0))  # clamp 1h
 
@@ -164,7 +264,7 @@ def run():
     except (KeyError, ValueError, TypeError) as exc:
         return jsonify({"error": f"Bad instance payload: {exc}"}), 400
 
-    result = _execute_with_timeout(payload, algorithm_name, timeout_sec)
+    result = _execute_with_timeout(payload, algorithm_name, timeout_sec, with_trace=with_trace)
     result["algorithm"] = algorithm_name
     result["instance_id"] = instance_id or "custom"
     result["timeout_budget_sec"] = timeout_sec

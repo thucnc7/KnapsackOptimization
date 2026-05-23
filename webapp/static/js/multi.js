@@ -26,11 +26,13 @@ const MultiSolver = {
     const sel = document.getElementById('multi-instance');
     sel.innerHTML = '';
     const filtered = MultiSolver.allInstances.filter((it) => !q || it.id.toLowerCase().includes(q.toLowerCase()));
-    filtered.slice(0, 500).forEach((it) => {
+    filtered.slice(0, 500).forEach((it, i) => {
       const opt = document.createElement('option');
       opt.value = it.id; opt.textContent = it.id;
+      if (i === 0) opt.selected = true;
       sel.appendChild(opt);
     });
+    if (filtered.length) sel.value = filtered[0].id;
   },
 
   async run() {
