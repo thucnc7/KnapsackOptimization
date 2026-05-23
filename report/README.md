@@ -1,52 +1,47 @@
-# LaTeX Report — Final
+# 📝 Báo cáo thực nghiệm LaTeX
 
-Báo cáo cuối kỳ "Ứng dụng các mô hình quy hoạch tuyến tính cho các loại bài toán Knapsack"
-của Nguyễn Hoàng Đạt, Lê Sỹ Thức, Nguyễn Hải Anh.
+Thư mục này chứa báo cáo khoa học chính thức của dự án:
+**"Ứng dụng các mô hình quy hoạch tuyến tính cho các loại bài toán Knapsack"**
+Thực hiện bởi: Nguyễn Hoàng Đạt · Lê Sỹ Thức · Nguyễn Hải Anh.
 
-Nội dung và assets đầy đủ (template + ảnh + logo) lấy từ bản zip mà tác giả gửi.
+---
 
-## Compile
+## 🗺️ Điều hướng nhanh (Navigation)
 
+- **Trang chủ dự án:** [README.md](../../README.md)
+- **Mã nguồn tối ưu Python:** [KnapsackOptimization/README.md](../README.md)
+  - 📊 [Phân tích & Đồ thị](../notebooks/README.md) - Thống kê và kiểm định thực nghiệm.
+  - ⏱️ [Trình đo hiệu năng](../benchmark/README.md) - Hệ thống benchmark cô lập tiến trình.
+  - ⚙️ [Quản lý dữ liệu](../data/README.md) - Sinh dữ liệu theo phân phối Gauss.
+  - 🌐 [Giao diện Webapp](../webapp/README.md) - Bảng điều khiển Flask tương tác.
+  - 📝 [Báo cáo LaTeX](README.md) - Báo cáo thực nghiệm khoa học chi tiết.
+
+---
+
+## 📂 Danh sách tệp tin
+
+- **`report.tex`** — Mã nguồn LaTeX của báo cáo chính (preamble + 7 chương + danh mục tham khảo).
+- **`report.pdf`** — Bản báo cáo PDF hoàn chỉnh đã được biên dịch (~49 trang).
+- **`refs.bib`** — Danh mục tài liệu tham khảo chuẩn BibTeX (chứa trích dẫn thuật toán LP, NP-hard, Simplex...).
+- **`husthesis-en.sty`** — Tệp cấu hình giao diện luận văn chuẩn chính thức.
+- **`image/`** — Thư mục chứa các đồ thị phân tích thực nghiệm (quality check, curve fitting, benchmark comparison, sensitivity analysis).
+- **`logo/`** — Thư mục chứa các ảnh logo trường phục vụ trang bìa báo cáo.
+
+---
+
+## 🚀 Hướng dẫn biên dịch (Compile Guide)
+
+Hệ thống được đồng bộ hóa và biên dịch tối ưu nhất bằng **pdfLaTeX**. Đảm bảo máy tính của bạn đã cài đặt một phân phối LaTeX đầy đủ (như MiKTeX hoặc TeX Live).
+
+### 1. Biên dịch báo cáo chính (`report.tex`):
+Di chuyển vào thư mục `report/` và thực thi:
 ```bash
-cd report
-xelatex report.tex
-bibtex report
-xelatex report.tex
-xelatex report.tex
+pdflatex report.tex
+bibtex report.aux
+pdflatex report.tex
+pdflatex report.tex
 ```
 
-Output: `report.pdf` — **47 trang, ~6 MB**.
 
-## Bố cục
-
-- `report.tex` — toàn bộ nội dung báo cáo (preamble + 7 sections + bibliography)
-- `refs.bib` — references
-- `husthesis-en.sty` — HUST official thesis template (do tác giả cung cấp trong zip)
-- `image/` — 50+ ảnh thực nghiệm: quality, scatter, curvefit, sensitivity, memory comparison, runtime comparison
-- `logo/` — HUST logo cho cover page
-
-## Stubs cho TeX Live basic
-
-Một số package mà repo phụ thuộc không có trong TeX Live basic. Repo bundle stubs tối giản:
-
-| File | Thay cho | Vai trò |
-|------|----------|---------|
-| `vietnam.sty` | `vietnam` package | No-op (xelatex handle Unicode natively) |
-| `nomencl.sty` | `nomencl` package | Stub `\nomname`, `\printnomenclature`, `\makenomenclature` |
-| `multirow.sty` | `multirow` package | `\multirow{n}{w}{text}` → `text` |
-| `enumitem.sty` | `enumitem` package | No-op `[noitemsep]`, `[leftmargin=*]` keys |
-| `algorithm2e.sty` | `algorithm2e` package | Stub keywords + control flow + `\SetKwFunction` |
-| `placeins.sty` | `placeins` package | `\FloatBarrier` → `\clearpage` |
-
-Khi hệ thống có sẵn các package đầy đủ, xóa các file `.sty` tương ứng để LaTeX dùng package gốc.
-
-## Patches xelatex-friendly
-
-Bản tex gốc dùng `pdflatex` với `\usepackage[utf8]{vietnam}` và `\usepackage[vietnamese]{babel}`.
-Để compile được với xelatex (Unicode native, font Vietnamese tốt hơn), preamble đã được patch:
-
-- `\usepackage[utf8,nocaptions]{vietnam}` → `\usepackage{fontspec}` + `\usepackage{polyglossia}` + `\setdefaultlanguage{vietnamese}`
-- `\usepackage[vietnamese]{babel}` → comment ra (polyglossia thay thế)
-- `\usepackage{mathptmx}` → comment ra (xung đột Unicode tiếng Việt)
-
-Nội dung body và 23 references không thay đổi.
+> [!TIP]
+> **Đồng bộ hóa đồ thị:** Khi bạn chạy lại pipeline phân tích thực nghiệm thông qua lệnh `python notebooks/execute_notebook.py` từ thư mục gốc, các hình ảnh đồ thị mới nhất sẽ tự động được sao chép và cập nhật trực tiếp vào thư mục `report/image/` để phục vụ việc biên dịch báo cáo tức thời.
