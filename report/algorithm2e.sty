@@ -1,0 +1,58 @@
+% Minimal stub for algorithm2e — provides the `algorithm` environment plus
+% keyword + control-flow macros used by the report. Renders pseudo-code as
+% indented text without the full algorithm2e formatting.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{algorithm2e}[2026/05/23 stub algorithm2e]
+
+\RequirePackage{float}
+\RequirePackage{xspace}
+
+\floatstyle{ruled}
+\newfloat{algorithm}{tbph}{loa}[section]
+\floatname{algorithm}{Algorithm}
+
+\DeclareOption*{}
+\ProcessOptions\relax
+
+\providecommand{\KwIn}[1]{\noindent\textbf{Input:} #1\par}
+\providecommand{\KwOut}[1]{\noindent\textbf{Output:} #1\par}
+\providecommand{\Return}{\textbf{return}\xspace}
+\providecommand{\KwTo}{\textbf{to}\xspace}
+
+% \If, \eIf etc accept an optional parenthesised comment argument that
+% algorithm2e uses for inline labels: \If(\tcp*{...}){cond}{body}
+\def\@swallowparen(#1){}
+\def\@stub@if{\@ifnextchar({\@stub@ifparen}{\@stub@ifplain}}
+\def\@stub@ifparen(#1)#2#3{\textbf{if} #2 \textbf{then} #3\par}
+\def\@stub@ifplain#1#2{\textbf{if} #1 \textbf{then} #2\par}
+\def\If{\@stub@if}
+\def\@stub@eif{\@ifnextchar({\@stub@eifparen}{\@stub@eifplain}}
+\def\@stub@eifparen(#1)#2#3#4{\textbf{if} #2 \textbf{then} #3 \textbf{else} #4\par}
+\def\@stub@eifplain#1#2#3{\textbf{if} #1 \textbf{then} #2 \textbf{else} #3\par}
+\def\eIf{\@stub@eif}
+\def\@stub@for{\@ifnextchar({\@stub@forparen}{\@stub@forplain}}
+\def\@stub@forparen(#1)#2#3{\textbf{for} #2 \textbf{do} #3\par}
+\def\@stub@forplain#1#2{\textbf{for} #1 \textbf{do} #2\par}
+\def\For{\@stub@for}
+\providecommand{\While}[2]{\textbf{while} #1 \textbf{do} #2\par}
+\providecommand{\Else}[1]{\textbf{else} #1\par}
+
+% Define a macro that prints function name + args
+\providecommand{\SetKwFunction}[2]{%
+  \expandafter\def\csname #1\endcsname##1{\textsc{#2}(##1)}%
+}
+
+\providecommand{\SetKwProg}[4]{%
+  \expandafter\def\csname #1\endcsname##1##2{%
+    \par\noindent\textbf{#2} ##1 #3 ##2\par
+  }%
+}
+
+% Inline comment macros
+\providecommand{\tcp}[1]{\quad$\triangleright$ \textit{#1}}
+\@namedef{tcp*}{\@ifnextchar[\tcp@star\tcp@star@}
+\def\tcp@star[#1]#2{\quad$\triangleright$ \textit{#2}}
+\def\tcp@star@#1{\quad$\triangleright$ \textit{#1}}
+
+% Statement terminator — must NOT clobber math \; spacing
+\@ifundefined{algoEoL}{\providecommand{\algoEoL}{\par}}{}

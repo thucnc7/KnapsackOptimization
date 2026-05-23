@@ -1,0 +1,64 @@
+% Minimal stub for husthesis-en.sty so the report compiles without the
+% official HUST class. Provides cover-page macros, layout commands, and
+% no-op nomenclature so the report's preamble loads cleanly.
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{husthesis-en}[2026/05/23 Knapsack report stub for HUST thesis]
+
+\RequirePackage{geometry}
+\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=3cm, right=2cm}
+
+% Cover-page metadata setters
+\newcommand{\@ctname}{Report Title}
+\newcommand{\ctname}[1]{\renewcommand{\@ctname}{#1}}
+
+\newcommand{\@cstuname}{Author}
+\newcommand{\cstuname}[1]{\renewcommand{\@cstuname}{#1}}
+
+\newcommand{\@csMajor}{Major}
+\newcommand{\csMajor}[1]{\renewcommand{\@csMajor}{#1}}
+
+\newcommand{\@cttime}{2026}
+\newcommand{\cttime}[1]{\renewcommand{\@cttime}{#1}}
+
+\newcommand{\@crname}{Tiểu luận khoa học}
+\newcommand{\crname}[1]{\renewcommand{\@crname}{#1}}
+
+% Layout hook — no-op in the stub.
+\newcommand{\thesislayout}{}
+
+\newcommand{\coverpage}{%
+  \begin{titlepage}
+    \begin{center}
+      {\large \textbf{TRƯỜNG ĐẠI HỌC BÁCH KHOA HÀ NỘI}\par}
+      \vspace{0.4cm}
+      {\large \textbf{HANOI UNIVERSITY OF SCIENCE AND TECHNOLOGY}\par}
+      \vspace{2cm}
+      {\large \textbf{\@crname}\par}
+      \vspace{1.5cm}
+      {\LARGE \textbf{\@ctname}\par}
+      \vspace{2cm}
+      {\large \@cstuname\par}
+      \vspace{1cm}
+      {\large Ngành: \@csMajor\par}
+      \vfill
+      {\large Hà Nội, \@cttime\par}
+    \end{center}
+  \end{titlepage}
+}
+
+\newcommand{\secondcoverpage}{\coverpage}
+
+% Abstract environment override
+\providecommand{\abstractname}{Tóm tắt}
+\renewenvironment{abstract}{%
+  \clearpage
+  \begin{center}\textbf{\Large \abstractname}\end{center}
+  \vspace{0.5em}
+}{\clearpage}
+
+% Nomenclature stubs (real macros from nomencl not bundled in this minimal
+% TeX install). \printnomenclature becomes a no-op.
+\providecommand{\nomenclature}[2]{}
+\providecommand{\printnomenclature}{}
+\providecommand{\makenomenclature}{}

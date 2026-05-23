@@ -1,0 +1,85 @@
+%\documentclass[fontsize=13pt,a4paper,oneside, DIV=calc, chapterprefix=true]{scrbook} % twoside for draft
+\documentclass[fontsize=13pt,a4paper]{report}
+
+% xelatex-friendly Vietnamese setup: fontspec + polyglossia instead of
+% the vietnam package (which is not bundled with TeX Live basic).
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{vietnamese}
+% Try common system fonts in order of preference
+\IfFontExistsTF{Latin Modern Roman}
+  {\setmainfont{Latin Modern Roman}}
+  {\IfFontExistsTF{TeX Gyre Termes}
+    {\setmainfont{TeX Gyre Termes}}
+    {\IfFontExistsTF{Times New Roman}
+      {\setmainfont{Times New Roman}}
+      {}}}
+
+\usepackage{husthesis-en}
+\usepackage{enumitem}
+
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+
+\usepackage{array}
+\newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{M}[1]{>{\centering\arraybackslash}m{#1}}
+\usepackage{fancyhdr}
+% multirow not bundled in TeX Live basic; the report doesn't use \multirow
+\usepackage[linesnumbered,ruled,vlined]{algorithm2e}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{placeins}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+}
+
+\ctname{ỨNG DỤNG \\ CÁC MÔ HÌNH QUY HOẠCH TUYẾN TÍNH \\ CHO CÁC LOẠI BÀI TOÁN KNAPSACK}
+\cstuname{
+Nguyễn Hoàng Đạt - 24001989 \\
+Nguyễn Hải Anh - <Mã SV> \\
+Lê Sỹ Thức - <Mã SV> \\
+}
+
+\csMajor{Khoa học máy tính và thông tin}
+\cttime{2026}
+
+\thesislayout
+
+\counterwithout{section}{chapter}
+
+\begin{document}
+
+\coverpage
+\secondcoverpage
+
+\begin{abstract}
+Ra đời vào năm 1947 và được xem là một trong những thuật toán có ảnh hưởng sâu rộng nhất của thế kỷ XX, thuật toán đơn hình (simplex method) đóng vai trò nền tảng trong lĩnh vực quy hoạch tuyến tính và tối ưu hóa. Sự phát triển của các biến thể như thuật toán đơn hình hai pha và thuật toán đơn hình đối ngẫu đã mở rộng đáng kể khả năng ứng dụng của phương pháp này trong nhiều bài toán tối ưu thực tiễn thuộc khoa học, kỹ thuật và công nghiệp.
+
+Bài toán cái túi (Knapsack Problem) là một trong những bài toán tối ưu tổ hợp kinh điển của khoa học máy tính, với nhiều ứng dụng trong phân bổ tài nguyên, quản lý danh mục đầu tư, lập lịch sản xuất và hỗ trợ ra quyết định. Trong báo cáo này, chúng tôi khảo sát ba biến thể quan trọng của bài toán knapsack gồm fractional knapsack, unbounded knapsack và 0/1 knapsack dưới góc nhìn của quy hoạch tuyến tính và quy hoạch nguyên. Trên cơ sở đó, báo cáo trình bày việc áp dụng các phương pháp đơn hình, bao gồm đơn hình nguyên thủy, đơn hình hai pha và đơn hình đối ngẫu, để giải các mô hình tương ứng.
+
+Ngoài việc phân tích mô hình toán học và cơ chế hoạt động của các thuật toán, báo cáo còn đánh giá hiệu quả thực nghiệm của các phương pháp dựa trên quy hoạch tuyến tính, đồng thời so sánh chúng với các chiến lược thiết kế thuật toán kinh điển như vét cạn, quay lui, nhánh-cận, tham lam và quy hoạch động. Qua đó, báo cáo làm rõ ưu điểm, hạn chế cũng như tiềm năng ứng dụng của các phương pháp đơn hình trong việc giải các bài toán knapsack và các bài toán tối ưu tổ hợp mở rộng.
+\end{abstract}
+
+\printnomenclature
+\tableofcontents
+\vfil\null\endtitlepage
+
+\fancyhead{}
+\renewcommand{\footrulewidth}{0.4pt}
+\pagestyle{fancy}
+
+\input{body.tex}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

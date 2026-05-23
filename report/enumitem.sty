@@ -1,0 +1,16 @@
+% Minimal stub for enumitem — supports [noitemsep] and [leftmargin=*] keys
+% on itemize/enumerate, which is all the report uses.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{enumitem}[2026/05/23 stub enumitem]
+
+\RequirePackage{keyval}
+
+% Accept any list options as no-ops. Patch \itemize and \enumerate to
+% swallow optional [args] arguments.
+\let\@orig@itemize\itemize
+\let\@orig@enditemize\enditemize
+\renewenvironment{itemize}[1][]{\@orig@itemize}{\@orig@enditemize}
+
+\let\@orig@enumerate\enumerate
+\let\@orig@endenumerate\endenumerate
+\renewenvironment{enumerate}[1][]{\@orig@enumerate}{\@orig@endenumerate}

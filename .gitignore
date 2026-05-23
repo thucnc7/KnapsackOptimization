@@ -30,3 +30,16 @@ results/csv/job_*.log
 # LaTeX folder (untracked local folder)
 latex/
 
+# LaTeX intermediate compilation artifacts
+report/*.aux
+report/*.log
+report/*.toc
+report/*.out
+report/*.lof
+report/*.lot
+report/*.nlo
+report/*.nls
+report/*.bbl
+report/*.blg
+report/*.synctex.gz
+
