@@ -93,6 +93,18 @@ PLOTS.mkdir(parents=True, exist_ok=True)
 def save(fig, name):
     fig.savefig(PLOTS / name, dpi=300, bbox_inches="tight", facecolor=FIG_BG)
     print(f"Saved -> {PLOTS / name}")
+    import shutil
+    latex_dir = None
+    for p in [ROOT] + list(ROOT.parents):
+        if (p / "latex" / "report.tex").exists() or (p / "latex" / "report_thucnghiem.tex").exists():
+            latex_dir = p / "latex"
+            break
+    if latex_dir and latex_dir.exists():
+        latex_img = latex_dir / "image"
+        target = latex_img / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(PLOTS / name, target)
+        print(f"Copied to latex -> {target}")
 
 print("Root:", ROOT)\
 """))
@@ -279,6 +291,202 @@ else:
         fig.tight_layout()
         save(fig, f"curvefit_{algo}.png")
         plt.show()\
+"""))
+
+# ── Cell: Overview Plots ──────────────────────────────────────────────────────
+CELLS.append(md("""\
+## 4 · Comparative Overview Plots
+
+We generate several summary plots to compare algorithms directly:
+1. **Execution Status Comparison:** Stacked bar chart of Success, Timeout, and Error rates.
+2. **Peak Memory Comparison:** Box plot of maximum memory usage per solver on successful runs.
+3. **Median Runtime comparison vs N:** Split into 4 separate plots classified by Knapsack problem types:
+   - **`runtime_comparison_01_small.png`**: Exact & Greedy solvers for 0/1 Knapsack (N <= 50)
+   - **`runtime_comparison_01_large.png`**: Large-scale solvers for 0/1 Knapsack (N <= 1000)
+   - **`runtime_comparison_unbounded.png`**: Unbounded Knapsack solvers vs 0/1 DP (N <= 1000)
+   - **`runtime_comparison_fractional.png`**: Fractional Knapsack solvers (N <= 1000)\
+"""))
+
+CELLS.append(code("""\
+# 1. Execution Status Comparison
+fig, ax = plt.subplots(figsize=(10, 5), facecolor=FIG_BG)
+status_counts = df.groupby(["algorithm", "status"]).size().unstack(fill_value=0)
+for col in ["SUCCESS", "TIMEOUT", "ERROR"]:
+    if col not in status_counts.columns:
+        status_counts[col] = 0
+status_counts = status_counts[["SUCCESS", "TIMEOUT", "ERROR"]]
+status_counts.plot(kind="barh", stacked=True, color=["#00d4aa", "#ff6b6b", "#ffd166"], ax=ax, edgecolor=GRID_CLR)
+style_ax(ax, "Algorithm Execution Status Overview", "Count", "Algorithm")
+ax.legend(title="Status", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR)
+fig.tight_layout()
+fig.subplots_adjust(top=0.90)
+save(fig, "algo_status_comparison.png")
+plt.show()
+
+# 2. Peak Memory Comparison
+df_ok = df[df["is_success"]].copy()
+if not df_ok.empty:
+    fig, ax = plt.subplots(figsize=(10, 5.5), facecolor=FIG_BG)
+    order = df_ok.groupby("algorithm")["peak_memory_mb"].median().sort_values().index
+    sns.boxplot(
+        data=df_ok, x="algorithm", y="peak_memory_mb", order=order,
+        palette=algo_pal(order), ax=ax, width=0.6, fliersize=3,
+        boxprops=dict(edgecolor=TEXT_CLR),
+        whiskerprops=dict(color=MUTED_CLR),
+        capprops=dict(color=MUTED_CLR),
+        medianprops=dict(color="white", linewidth=1.5)
+    )
+    ax.set_yscale("log")
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.3g}MB"))
+    plt.xticks(rotation=30, ha="right")
+    style_ax(ax, "Peak Memory Usage Comparison (Log Scale)", "Algorithm", "Peak Memory (MB)")
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.90)
+    save(fig, "memory_comparison.png")
+    plt.show()
+
+# 3. Runtime Comparison vs N (Classified by Knapsack Problem Types)
+# 3a. 0/1 Knapsack - Small-Scale (Exact & Greedy)
+fig, ax = plt.subplots(figsize=(8, 5), facecolor=FIG_BG)
+exact_algos = ["Backtracking", "BranchAndBound", "DP", "SimplexBnB", "GomoryCut", "Greedy01"]
+for algo in exact_algos:
+    if algo not in ALGOS:
+        continue
+    sub = df_ok[(df_ok["algorithm"] == algo) & (df_ok["n"] <= 50)]
+    if sub.empty or sub["n"].nunique() < 2:
+        continue
+    medians = sub.groupby("n")["time_sec"].median().reset_index()
+    ax.plot(medians["n"], medians["time_sec"], "o-", color=PAL[algo], label=algo, lw=2, ms=5)
+ax.set_yscale("log")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.2g}s"))
+style_ax(ax, "Median Runtime: 0/1 Knapsack - Small Scale (N <= 50, Log Scale)", "N (items)", "Runtime (seconds)")
+ax.legend(title="Algorithm", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR)
+fig.tight_layout()
+fig.subplots_adjust(top=0.90)
+save(fig, "runtime_comparison_01_small.png")
+plt.show()
+
+# 3b. 0/1 Knapsack - Large-Scale (DP & Greedy)
+fig, ax = plt.subplots(figsize=(8, 5), facecolor=FIG_BG)
+large_01_algos = ["DP", "Greedy01"]
+for algo in large_01_algos:
+    if algo not in ALGOS:
+        continue
+    sub = df_ok[(df_ok["algorithm"] == algo) & (df_ok["n"] <= 1000)]
+    if sub.empty or sub["n"].nunique() < 2:
+        continue
+    medians = sub.groupby("n")["time_sec"].median().reset_index()
+    ax.plot(medians["n"], medians["time_sec"], "o-", color=PAL[algo], label=algo, lw=2, ms=5)
+ax.set_yscale("log")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.2g}s"))
+style_ax(ax, "Median Runtime: 0/1 Knapsack - Large Scale (N <= 1000, Log Scale)", "N (items)", "Runtime (seconds)")
+ax.legend(title="Algorithm", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR)
+fig.tight_layout()
+fig.subplots_adjust(top=0.90)
+save(fig, "runtime_comparison_01_large.png")
+plt.show()
+
+# 3c. Unbounded Knapsack (DPUnbounded vs DP 0/1 reference)
+fig, ax = plt.subplots(figsize=(8, 5), facecolor=FIG_BG)
+unbounded_algos = ["DPUnbounded", "DP"]
+for algo in unbounded_algos:
+    if algo not in ALGOS:
+        continue
+    sub = df_ok[(df_ok["algorithm"] == algo) & (df_ok["n"] <= 1000)]
+    if sub.empty or sub["n"].nunique() < 2:
+        continue
+    medians = sub.groupby("n")["time_sec"].median().reset_index()
+    label_name = f"{algo} (0/1 Ref)" if algo == "DP" else algo
+    ax.plot(medians["n"], medians["time_sec"], "o-", color=PAL[algo], label=label_name, lw=2, ms=5)
+ax.set_yscale("log")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.2g}s"))
+style_ax(ax, "Median Runtime: Unbounded Knapsack (N <= 1000, Log Scale)", "N (items)", "Runtime (seconds)")
+ax.legend(title="Algorithm", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR)
+fig.tight_layout()
+fig.subplots_adjust(top=0.90)
+save(fig, "runtime_comparison_unbounded.png")
+plt.show()
+
+# 3d. Fractional Knapsack Solvers
+fig, ax = plt.subplots(figsize=(8, 5), facecolor=FIG_BG)
+fractional_algos = ["GreedyFractional", "PrimalSimplex", "DualSimplex"]
+for algo in fractional_algos:
+    if algo not in ALGOS:
+        continue
+    sub = df_ok[(df_ok["algorithm"] == algo) & (df_ok["n"] <= 1000)]
+    if sub.empty or sub["n"].nunique() < 2:
+        continue
+    medians = sub.groupby("n")["time_sec"].median().reset_index()
+    ax.plot(medians["n"], medians["time_sec"], "o-", color=PAL[algo], label=algo, lw=2, ms=5)
+ax.set_yscale("log")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.2g}s"))
+style_ax(ax, "Median Runtime: Fractional Knapsack (N <= 1000, Log Scale)", "N (items)", "Runtime (seconds)")
+ax.legend(title="Algorithm", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR)
+fig.tight_layout()
+fig.subplots_adjust(top=0.90)
+save(fig, "runtime_comparison_fractional.png")
+plt.show()
+"""))
+
+# ── Cell: Correlation and Pairplots ───────────────────────────────────────────
+CELLS.append(md("""\
+## 5 · Attribute Correlation & Pairwise Distributions
+
+We generate two statistical plots to analyze our testcases:
+1. **Attribute Correlation Heatmap:** Pearson correlation coefficients between input parameters (N, capacity ratio, Pearson R) of the generated testcases.
+2. **Pairwise Attribute Distributions (Pairplot):** Joint distributions of N, capacity ratio, and Pearson R across all unique generated instances.\
+"""))
+
+CELLS.append(code("""\
+# 1. Correlation Heatmap
+df_unique = df.drop_duplicates(subset=["test_id"]).copy()
+cols = ["n", "capacity_to_weight_ratio", "pearson_corr"]
+corr_cols = {
+    "n": "N",
+    "capacity_to_weight_ratio": "Capacity Ratio",
+    "pearson_corr": "Pearson R"
+}
+df_corr = df_unique[cols].rename(columns=corr_cols)
+corr = df_corr.corr()
+
+fig, ax = plt.subplots(figsize=(6.5, 5.5), facecolor=FIG_BG)
+sns.heatmap(
+    corr, annot=True, fmt=".4f", cmap="coolwarm", center=0,
+    square=True, ax=ax, cbar_kws={"shrink": .8},
+    annot_kws={"size": 10, "weight": "bold", "color": "white"}
+)
+style_ax(ax, "Input Attribute Correlation Heatmap (Unique Testcases)", "", "")
+ax.tick_params(colors=TEXT_CLR)
+fig.tight_layout()
+save(fig, "correlation_heatmap.png")
+plt.show()
+
+# 2. Pairwise Attribute Distributions
+df_unique = df.drop_duplicates(subset=["test_id"]).copy()
+plot_cols = ["n", "capacity_to_weight_ratio", "pearson_corr"]
+df_plot = df_unique[plot_cols].rename(columns={
+    "n": "N",
+    "capacity_to_weight_ratio": "Capacity Ratio",
+    "pearson_corr": "Pearson R"
+})
+
+g = sns.PairGrid(df_plot, diag_sharey=False)
+g.fig.set_facecolor(FIG_BG)
+for ax in g.axes.flat:
+    ax.set_facecolor(AX_BG)
+    ax.xaxis.grid(True, color=GRID_CLR, linestyle="--", linewidth=0.5)
+    ax.yaxis.grid(True, color=GRID_CLR, linestyle="--", linewidth=0.5)
+    ax.tick_params(colors=MUTED_CLR)
+    ax.xaxis.label.set_color(MUTED_CLR)
+    ax.yaxis.label.set_color(MUTED_CLR)
+
+g.map_diag(sns.histplot, color="#00d4aa", kde=True, edgecolor=GRID_CLR, facecolor="#00d4aa", alpha=0.6)
+g.map_offdiag(sns.scatterplot, color="#7b68ee", alpha=0.5, s=20, edgecolor=AX_BG, linewidth=0.3)
+
+g.fig.suptitle("Pairwise Attribute Distributions (Gaussian Mixture Verification)", color=TEXT_CLR, fontsize=12, fontweight="bold", y=1.02)
+g.savefig(PLOTS / "attributes_pairplot.png", dpi=300, bbox_inches="tight", facecolor=FIG_BG)
+print(f"Saved -> {PLOTS / 'attributes_pairplot.png'}")
+plt.show()
 """))
 
 # ── Write notebook ────────────────────────────────────────────────────────────

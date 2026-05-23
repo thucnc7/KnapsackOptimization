@@ -1,8 +1,9 @@
 """Generate JSON benchmark instances for the 0/1 knapsack problem.
 
-Key design decisions (v3 – Gaussian Jitter + Rejection Sampling):
-  - n_actual   = N(n, 0.10·n)          clamped to >= 2
-  - ratio_actual = N(ratio, 0.05·ratio) clamped to [0.01, 1.0]
+Key design decisions (v4 – Gaussian Mixture + Rejection Sampling):
+  - n_actual   = N(n, max(1.0, 0.35·n))   clamped to >= 2
+  - ratio_actual = N(ratio, max(0.005, 0.15·ratio)) clamped to [0.01, 1.0]
+  - pearson_actual = N(pearson_anchor, 0.30) clamped to [-0.99, 0.99]
   - When target_pearson_r >= 0.9, rejection-sample until the realised
     Pearson r is within 0.03 of the target (max 200 attempts).
 """
@@ -99,17 +100,23 @@ def _generate_with_rejection(
 
 
 def _jitter_n(rng: np.random.Generator, n_anchor: int) -> int:
-    """Apply Gaussian jitter:  n_actual = N(n, 0.10·n), clamped >= 2."""
-    sigma = max(1.0, n_anchor * 0.10)
+    """Apply Gaussian jitter:  n_actual = N(n, max(1.0, n*0.35)), clamped >= 2."""
+    sigma = max(1.0, n_anchor * 0.35)
     n_actual = int(round(rng.normal(loc=n_anchor, scale=sigma)))
     return max(2, n_actual)
 
 
 def _jitter_ratio(rng: np.random.Generator, ratio_anchor: float) -> float:
-    """Apply Gaussian jitter: ratio_actual = N(ratio, 0.05·ratio), [0.01, 1.0]."""
-    sigma = max(0.005, ratio_anchor * 0.05)
+    """Apply Gaussian jitter: ratio_actual = N(ratio, max(0.005, ratio*0.15)), [0.01, 1.0]."""
+    sigma = max(0.005, ratio_anchor * 0.15)
     ratio_actual = rng.normal(loc=ratio_anchor, scale=sigma)
     return float(np.clip(ratio_actual, 0.01, 1.0))
+
+
+def _jitter_pearson(rng: np.random.Generator, pearson_anchor: float) -> float:
+    """Apply Gaussian jitter: pearson_actual = N(pearson_anchor, 0.30), [-0.99, 0.99]."""
+    pearson_actual = rng.normal(loc=pearson_anchor, scale=0.30)
+    return float(np.clip(pearson_actual, -0.99, 0.99))
 
 
 # ── Build helpers ────────────────────────────────────────────────────────────
@@ -128,6 +135,7 @@ def _instance_to_json_dict(
     n_anchor: int,
     n_actual: int,
     target_pearson_r: float,
+    pearson_actual: float,
     ratio_anchor: float,
     ratio_actual: float,
     max_weight: int,
@@ -142,6 +150,7 @@ def _instance_to_json_dict(
             "n_anchor": n_anchor,
             "n_actual": n_actual,
             "target_pearson_r": target_pearson_r,
+            "pearson_actual": pearson_actual,
             "capacity_ratio_anchor": ratio_anchor,
             "capacity_ratio_actual": ratio_actual,
             "max_weight": max_weight,
@@ -163,16 +172,17 @@ def generate_instance(
     rng: np.random.Generator,
     scenario_name: str,
     max_weight: int = DEFAULT_MAX_WEIGHT,
-) -> Tuple[KnapsackInstance, str, int, float]:
-    """Generate a single instance with Gaussian jitter on n and ratio.
+) -> Tuple[KnapsackInstance, str, int, float, float]:
+    """Generate a single instance with Gaussian jitter on n, ratio, and pearson.
 
-    Returns (instance, test_id, n_actual, ratio_actual).
+    Returns (instance, test_id, n_actual, ratio_actual, pearson_actual).
     """
     n_actual = _jitter_n(rng, n_anchor)
     ratio_actual = _jitter_ratio(rng, ratio_anchor)
+    pearson_actual = _jitter_pearson(rng, target_pearson_r)
 
     weights, values = _generate_with_rejection(
-        rng, n_actual, max_weight, target_pearson_r
+        rng, n_actual, max_weight, pearson_actual
     )
     total_weight = float(np.sum(weights))
     capacity = total_weight * ratio_actual
@@ -185,7 +195,7 @@ def generate_instance(
         f"{scenario_name}_n{n_anchor}_wmax{max_weight}"
         f"_cr{ratio_anchor:g}_pr{target_pearson_r:g}_{idx_str}"
     )
-    return instance, test_id, n_actual, ratio_actual
+    return instance, test_id, n_actual, ratio_actual, pearson_actual
 
 
 def save_instance(
@@ -196,6 +206,7 @@ def save_instance(
     n_anchor: int,
     n_actual: int,
     target_pearson_r: float,
+    pearson_actual: float,
     ratio_anchor: float,
     ratio_actual: float,
     max_weight: int,
@@ -209,6 +220,7 @@ def save_instance(
         n_anchor=n_anchor,
         n_actual=n_actual,
         target_pearson_r=target_pearson_r,
+        pearson_actual=pearson_actual,
         ratio_anchor=ratio_anchor,
         ratio_actual=ratio_actual,
         max_weight=max_weight,
@@ -269,7 +281,7 @@ def main() -> None:
                             ) % (2**32)
                             rng = np.random.default_rng(iseed)
 
-                            inst, tid, n_act, r_act = generate_instance(
+                            inst, tid, n_act, r_act, p_act = generate_instance(
                                 n_anchor=n_anchor,
                                 ratio_anchor=ratio_anchor,
                                 target_pearson_r=target_r,
@@ -283,6 +295,7 @@ def main() -> None:
                                 n_anchor=n_anchor,
                                 n_actual=n_act,
                                 target_pearson_r=target_r,
+                                pearson_actual=p_act,
                                 ratio_anchor=ratio_anchor,
                                 ratio_actual=r_act,
                                 max_weight=mw,
