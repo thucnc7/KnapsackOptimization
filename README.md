@@ -11,17 +11,26 @@ Thư mục này chứa toàn bộ mã nguồn cài đặt thuật toán, trình 
 Repo được tổ chức theo nguyên tắc **tách biệt rõ ràng các lớp chức năng**: thuật toán (`src/`), sinh dữ liệu thực nghiệm (`data/`), khung benchmark (`benchmark/`), phân tích kết quả (`notebooks/`, `results/`), giao diện trực quan (`webapp/`), và tài liệu nghiên cứu (`plans/`). Mỗi lớp có thể chạy độc lập, đồng thời được liên kết qua một entry point thống nhất (`main.py`) và webapp.
 
 | Thư mục | Vai trò | Khi nào cần đến |
-|--------|---------|-----------------|
+| :--- | :--- | :--- |
 | **`src/`** | Cài đặt thuật toán: base classes + mixins, basic solvers (Greedy, DP, Backtracking, BnB), Simplex family (Primal, Dual, BnB+Simplex, Gomory) | Khi mở rộng/sửa thuật toán hoặc thêm solver mới |
 | **`data/`** | Sinh test instances theo `test_scenarios.json` (Gaussian jitter + rejection sampling), kiểm tra chất lượng phân phối, output JSON instances | Khi muốn tạo dữ liệu thực nghiệm mới hoặc verify chất lượng dataset |
 | **`benchmark/`** | Runner độc lập process-isolated với timeout + OOM protection, đo wall time + peak memory bằng `tracemalloc` | Khi chạy benchmark trên toàn bộ test suite, output CSV |
-| **`webapp/`** | Flask + vanilla JS + Chart.js dashboard với 7 modes (xem mục 5 dưới), cho phép chạy live solver trong trình duyệt | Khi muốn khám phá kết quả tương tác, demo cho người khác xem |
+| **`webapp/`** | Flask + vanilla JS + Chart.js dashboard với 7 modes, cho phép chạy live solver trong trình duyệt | Khi muốn khám phá kết quả tương tác, demo cho người khác xem |
 | **`notebooks/`** | Sinh và execute Jupyter notebook tự động → xuất PNG (scatter, curve fitting, comparison plots) | Khi cần báo cáo định lượng dạng PDF/LaTeX với biểu đồ chất lượng publication |
-| **`results/`** | Output: `csv/` (raw benchmark), `quality/` (phân tích dữ liệu), `plots/` (biểu đồ thực nghiệm) | Chứa artifacts của benchmark, không commit dữ liệu lớn vào git |
+| **`results/`** | Output: `csv/` (raw benchmark), `quality/` (phân tích dữ liệu), `plots/` (biểu đồ thực nghiệm) | Chứa và lưu trữ kết quả đầu ra của các đo đạc |
 | **`plans/`** | Research reports về thuật toán (so sánh literature), implementation plans cho features mới | Khi nghiên cứu lý thuyết hoặc theo dõi quyết định thiết kế |
 | **`main.py`** | Demo entry point: chạy 6 solvers trên 1 instance n=30, in bảng so sánh | Smoke test sau khi sửa code |
 
-Sơ đồ chi tiết các file được liệt kê ở mục **Sơ đồ các mô-đun chính** bên dưới.
+---
+
+## 🗺️ Điều hướng nhanh (Navigation)
+
+- **Trang chủ dự án:** [README.md](../README.md)
+- **Mã nguồn tối ưu Python:** [KnapsackOptimization/README.md](README.md)
+  - 📊 [Phân tích & Đồ thị](notebooks/README.md) - Thống kê và kiểm định thực nghiệm.
+  - ⏱️ [Trình đo hiệu năng](benchmark/README.md) - Hệ thống benchmark cô lập tiến trình.
+  - ⚙️ [Quản lý dữ liệu](data/README.md) - Sinh dữ liệu theo phân phối Gauss.
+  - 🌐 [Giao diện Webapp](webapp/README.md) - Bảng điều khiển Flask tương tác.
 
 ---
 
@@ -38,9 +47,11 @@ pip install -r requirements.txt
 Dữ liệu thử nghiệm được cấu hình chi tiết tại [`data/test_scenarios.json`](data/test_scenarios.json). Trình sinh dữ liệu sử dụng phương pháp **Gaussian jitter** (tự động biến thiên ngẫu nhiên xung quanh các neo kích thước phần tử $N$, tỷ lệ sức chứa `capacity_ratio`) và cơ chế **rejection sampling** để lọc các cặp trọng lượng - giá trị có hệ số tương quan Pearson mong muốn ($r \ge 0.9$ hoặc tùy chọn khác).
 
 ```bash
-python data/generator.py
+# Sử dụng tham số --seed (ví dụ: --seed 42) để đảm bảo kết quả sinh ngẫu nhiên là đồng nhất và có thể tái lập
+python data/generator.py --seed 42
 ```
-> Bộ dữ liệu raw sẽ được lưu vào thư mục `data/raw/` dưới định dạng JSON.
+> [!IMPORTANT]
+> **Hạt giống ngẫu nhiên (Set Seed) & Tính tái lập kết quả:** Hãy luôn chỉ định rõ tham số `--seed 42` (hoặc một số hạt giống cụ thể) khi sinh dữ liệu. Việc này giúp đảm bảo toàn bộ tệp testcase JSON sinh ra sẽ giống hệt nhau ở mỗi lần chạy, giúp người khác tái lập chính xác kết quả đo đạc benchmark và phân tích thực nghiệm giống như bạn.
 
 ### 2. Kiểm tra chất lượng phân phối dữ liệu (Quality Check)
 
@@ -49,6 +60,7 @@ python data/generator.py
 ```bash
 python data/quality.py --raw data/raw --output results/quality
 ```
+> [!TIP]
 > Biểu đồ phân phối Gauss và biểu đồ phân tán (scatter plot) sẽ được xuất ra thư mục `results/quality/`.
 
 ### 3. Thực thi Suite Benchmark hiệu năng
@@ -59,20 +71,21 @@ Chạy đo đạc thời gian thực thi (runtime) và lượng bộ nhớ tiêu
 python benchmark/runner.py --timeout 5 --output results/csv/benchmark_results.csv
 ```
 
-**Các tham số chính:**
-* `--timeout`: Thời gian chạy tối đa cho mỗi bài toán (mặc định: `5` giây).
-* `--limit`: Giới hạn số lượng testcase chạy thử (`0` = chạy tất cả).
-* `--raw`: Thư mục chứa dữ liệu đầu vào (mặc định: `data/raw`).
-* `--output`: File lưu kết quả benchmark dạng CSV.
+**Các tham số dòng lệnh chính:**
+- `--timeout`: Thời gian chạy tối đa cho mỗi bài toán (mặc định: `60` giây).
+- `--limit`: Giới hạn số lượng testcase chạy thử (`0` = chạy tất cả).
+- `--raw`: Thư mục chứa dữ liệu đầu vào (mặc định: `data/raw`).
+- `--output`: File lưu kết quả benchmark dạng CSV.
 
 ### 4. Tự động sinh báo cáo đồ thị (Analysis & Plotting)
 
-Sau khi có tệp `benchmark_results.csv`, bạn có thể vẽ toàn bộ các biểu đồ phân tích thực nghiệm chỉ bằng một dòng lệnh duy nhất mà không cần cài đặt các ứng dụng Notebook UI nặng nề:
+Sau khi có tệp `benchmark_results.csv`, bạn có thể vẽ toàn bộ các biểu đồ phân tích thực nghiệm chỉ bằng một dòng lệnh duy nhất:
 
 ```bash
 python notebooks/execute_notebook.py
 ```
 
+> [!NOTE]
 > **Đồ thị xuất ra bao gồm:**
 > - `scatter_{Algorithm}.png`: Đồ thị phân tán biểu diễn thời gian thực thi theo từng tham số (N, Tỷ lệ sức chứa, Hệ số Pearson).
 > - `curvefit_{Algorithm}.png`: Đồ thị tự động tìm kiếm và vẽ đường cong tiệm cận thực nghiệm (Linear, Quadratic, Cubic, Exponential) kèm chỉ số chỉ định độ khớp $R^2$.
@@ -88,65 +101,65 @@ Khởi động Flask webapp để khám phá dữ liệu benchmark, chạy live 
 python -m webapp.app --port 5000
 ```
 
-Mở [http://127.0.0.1:5000](http://127.0.0.1:5000). Webapp cung cấp **7 chế độ chạy** trên cùng một giao diện SPA:
+Mở trình duyệt tại [http://127.0.0.1:5000](http://127.0.0.1:5000). Webapp cung cấp **7 chế độ chạy** trên cùng một giao diện SPA:
 
-| Mode | Chức năng |
-|------|-----------|
-| **Dashboard** | Tổng quan CSV benchmark — success/timeout/error per algorithm, time/memory averages, thời gian theo N (log scale), bảng chi tiết |
-| **So sánh** | Paired comparison 2 thuật toán bất kỳ — scatter log-log thời gian, value khớp/lệch, speedup theo N |
-| **Single Solver** | Chọn 1 instance + 1 algorithm + timeout → chạy live với banner đếm thời gian + progress bar budget. Hiển thị capacity fill bar và scatter weight×value các items chọn/không chọn |
-| **Multi-Solver** | Streaming NDJSON: chạy nhiều thuật toán tuần tự trên 1 instance, mỗi algo emit `tick` mỗi 250ms để UI cập nhật badge realtime |
-| **Custom Instance** | Builder thủ công hoặc **sinh ngẫu nhiên** với config: N, max_weight, capacity_ratio, target Pearson r, seed |
-| **Data Quality** | Hiển thị `test_scenarios.json` + các biểu đồ chất lượng đã generate |
-| **Job Runner** | Spawn nền `benchmark/runner.py`, `data/generator.py`, `data/quality.py` với log streaming + progress bar parse từ tqdm |
+| Chế độ | Chức năng |
+| :--- | :--- |
+| **Dashboard** | Tổng quan CSV benchmark — success/timeout/error per algorithm, time/memory averages, thời gian theo N (log scale), bảng chi tiết. |
+| **So sánh** | Paired comparison 2 thuật toán bất kỳ — scatter log-log thời gian, value khớp/lệch, speedup theo N. |
+| **Single Solver** | Chọn 1 instance + 1 algorithm + timeout → chạy live với banner đếm thời gian + progress bar budget. Hiển thị capacity fill bar và scatter weight×value các items chọn/không chọn. |
+| **Multi-Solver** | Streaming NDJSON: chạy nhiều thuật toán tuần tự trên 1 instance, mỗi algo emit `tick` mỗi 250ms để UI cập nhật badge realtime. |
+| **Custom Instance** | Builder thủ công hoặc **sinh ngẫu nhiên** với config: N, max_weight, capacity_ratio, target Pearson r, seed. |
+| **Data Quality** | Hiển thị `test_scenarios.json` + các biểu đồ chất lượng đã sinh ra. |
+| **Job Runner** | Spawn nền `benchmark/runner.py`, `data/generator.py`, `data/quality.py` với log streaming + progress bar parse từ tqdm. |
 
-Chi tiết xem [`webapp/README.md`](webapp/README.md).
+Chi tiết xem tại [`webapp/README.md`](webapp/README.md).
 
 ---
 
 ## 📂 Sơ đồ các mô-đun chính
 
-```
+```text
 KnapsackOptimization/
-├── src/                        Mã nguồn lõi
-│   ├── models.py               Item, KnapsackInstance, metadata
+├── src/                        # Mã nguồn lõi thuật toán
+│   ├── models.py               # Item, KnapsackInstance, metadata
 │   └── algorithms/
-│       ├── base.py             BaseSolver + ZeroOne/Fractional/Unbounded mixins
-│       ├── basic/              Thuật toán cơ bản cho Knapsack
-│       │   ├── greedy.py       Greedy01 (heuristic) + GreedyFractional (LP optimal)
-│       │   ├── dp.py           Quy hoạch động (DP, DPUnbounded)
-│       │   ├── backtracking.py Quay lui có cắt tỉa
-│       │   └── branch_and_bound.py  Nhánh cận với LP relaxation bound
-│       └── simplex/            LP solvers vectorized với numpy
-│           ├── base_simplex.py        LP form conversion + dedup constraints
-│           ├── primal_simplex.py      Two-Phase Primal Simplex
-│           ├── dual_simplex.py        Dual Simplex (cho re-optimization)
-│           ├── branch_and_bound.py    Simplex-based Branch & Bound (integer)
-│           └── gomory_cut.py          Gomory cutting planes
+│       ├── base.py             # BaseSolver + ZeroOne/Fractional/Unbounded mixins
+│       ├── basic/              # Thuật toán exact cơ bản cho Knapsack
+│       │   ├── greedy.py       # Greedy01 (heuristic) + GreedyFractional (LP optimal)
+│       │   ├── dp.py           # Quy hoạch động (DP, DPUnbounded)
+│       │   ├── backtracking.py # Quay lui có cắt tỉa
+│       │   └── branch_and_bound.py # Nhánh cận với LP relaxation bound
+│       └── simplex/            # LP solvers vectorized với numpy
+│           ├── base_simplex.py        # LP form conversion + dedup constraints
+│           ├── primal_simplex.py      # Two-Phase Primal Simplex
+│           ├── dual_simplex.py        # Dual Simplex (cho re-optimization)
+│           ├── branch_and_bound.py    # Simplex-based Branch & Bound (integer)
+│           └── gomory_cut.py          # Gomory cutting planes
 │
-├── benchmark/                  Benchmark runner độc lập
-│   ├── runner.py               Process-isolated với timeout/OOM handling
-│   └── metrics.py              tracemalloc + perf_counter wrapper
+├── benchmark/                  # Benchmark runner độc lập
+│   ├── runner.py               # Process-isolated với timeout/OOM handling
+│   └── metrics.py              # tracemalloc + perf_counter wrapper
 │
-├── data/                       Sinh dữ liệu + kiểm tra chất lượng
-│   ├── generator.py            Gaussian jitter + rejection sampling Pearson r
-│   ├── quality.py              Phân tích phân phối, vẽ heatmap/dashboard
-│   ├── test_scenarios.json     4 suite: core_exact, core_heuristic, stress, extreme_n
-│   └── raw/                    JSON instances sinh ra
+├── data/                       # Sinh dữ liệu + kiểm tra chất lượng
+│   ├── generator.py            # Gaussian jitter + rejection sampling Pearson r
+│   ├── quality.py              # Phân tích phân phối, vẽ heatmap/dashboard
+│   ├── test_scenarios.json     # 4 kịch bản: core_exact, core_heuristic, stress, extreme_n
+│   └── raw/                    # JSON instances sinh ra
 │
-├── webapp/                     Flask + vanilla JS visualization SPA
-│   ├── app.py                  Entry point
-│   ├── api/                    4 blueprints: benchmark, data, solver, runner
-│   ├── static/                 CSS + JS modules (Chart.js từ CDN)
-│   └── templates/              SPA-style index.html với mode switcher
+├── webapp/                     # Flask + vanilla JS visualization SPA
+│   ├── app.py                  # Entry point
+│   ├── api/                    # 4 blueprints: benchmark, data, solver, runner
+│   ├── static/                 # CSS + JS modules (Chart.js từ CDN)
+│   └── templates/              # SPA-style index.html với mode switcher
 │
-├── notebooks/                  Auto-generated analysis notebooks
-│   ├── build_notebook.py       Sinh `.ipynb` từ template
-│   └── execute_notebook.py     Run notebook → xuất PNG vào results/plots
+├── notebooks/                  # Auto-generated analysis notebooks
+│   ├── build_notebook.py       # Sinh `.ipynb` từ template
+│   └── execute_notebook.py     # Run notebook → xuất PNG vào results/plots
 │
-├── results/                    Output: csv, plots, quality images
-├── plans/                      Research reports & implementation plans
-├── main.py                     Demo nhỏ chạy 6 solvers trên 1 instance n=30
+├── results/                    # Output: csv, plots, quality images
+├── plans/                      # Báo cáo nghiên cứu & Kế hoạch thực hiện
+├── main.py                     # Demo nhỏ chạy 6 solvers trên 1 instance n=30
 └── requirements.txt
 ```
 
@@ -156,7 +169,7 @@ KnapsackOptimization/
 
 ### Phát biểu bài toán
 
-**0/1 Knapsack** (bài toán cái túi 0/1) — cho `n` vật phẩm, mỗi vật phẩm `i` có trọng lượng `w_i > 0` và giá trị `v_i > 0`, và một sức chứa `W`. Tìm tập con S các vật phẩm sao cho:
+**0/1 Knapsack** (bài toán cái túi 0/1) — cho $n$ vật phẩm, mỗi vật phẩm $i$ có trọng lượng $w_i > 0$ và giá trị $v_i > 0$, và một sức chứa $W$. Tìm tập con $S$ các vật phẩm sao cho:
 
 $$\max \sum_{i \in S} v_i \quad \text{subject to} \quad \sum_{i \in S} w_i \leq W$$
 
@@ -164,171 +177,126 @@ Tương đương dạng chương trình tuyến tính nguyên (Integer Linear Pr
 
 $$\max \sum_{i=1}^{n} v_i x_i \quad \text{s.t.} \quad \sum_{i=1}^{n} w_i x_i \leq W,\ x_i \in \{0, 1\}$$
 
-**Fractional Knapsack** thay `x_i ∈ {0,1}` bằng `0 ≤ x_i ≤ 1`, cho phép lấy một phần vật phẩm. Đây chính là **LP relaxation** của bài 0/1.
+**Fractional Knapsack** thay $x_i \in \{0, 1\}$ bằng $0 \le x_i \le 1$, cho phép lấy một phần vật phẩm. Đây chính là **LP relaxation** của bài 0/1.
 
-**Unbounded Knapsack** thay bằng `x_i ∈ ℤ₊` — mỗi vật phẩm có thể lấy số lần không giới hạn.
+**Unbounded Knapsack** thay bằng $x_i \in \mathbb{Z}_+$ — mỗi vật phẩm có thể lấy số lần không giới hạn.
 
-### Bảng tổng quan
+### Bảng tổng quan thuật toán
 
-| Tên | Loại | Variant | Độ phức tạp | Optimality |
-|-----|------|---------|-------------|------------|
-| `GreedyKnapsackSolver` | Tham lam | 0/1 + Fractional | O(n log n) | ✓ cho Fractional, ✗ cho 0/1 |
-| `DPKnapsackSolver` | Pseudo-polynomial | 0/1 + Unbounded | O(n·W) | ✓ |
-| `BacktrackingSolver` | Vét cạn cắt tỉa | 0/1 | O(2ⁿ) worst case | ✓ |
-| `BranchAndBoundSolver` | Nhánh cận + LP | 0/1 | O(2ⁿ) worst, ~polynomial mean | ✓ |
-| `PrimalSimplexSolver` | Two-Phase Simplex | Fractional (LP) | exponential worst, ~O(n³) mean | ✓ |
-| `DualSimplexSolver` | Dual Simplex | Fractional (LP) | exponential worst, ~O(n³) mean | ✓ |
+| Tên thuật toán | Loại | Khả dụng cho | Độ phức tạp lý thuyết | Tính tối ưu (Optimality) |
+| :--- | :--- | :--- | :--- | :---: |
+| `GreedyKnapsackSolver` | Tham lam | 0/1 + Fractional | $O(n \log n)$ | ✓ cho Fractional, ✗ cho 0/1 |
+| `DPKnapsackSolver` | Pseudo-polynomial | 0/1 + Unbounded | $O(n \cdot W)$ | ✓ |
+| `BacktrackingSolver` | Vét cạn cắt tỉa | 0/1 | $O(2^n)$ worst case | ✓ |
+| `BranchAndBoundSolver` | Nhánh cận + LP | 0/1 | $O(2^n)$ worst, ~polynomial mean | ✓ |
+| `PrimalSimplexSolver` | Two-Phase Simplex | Fractional (LP) | exponential worst, $\approx O(n^3)$ mean | ✓ |
+| `DualSimplexSolver` | Dual Simplex | Fractional (LP) | exponential worst, $\approx O(n^3)$ mean | ✓ |
 | `BranchAndBoundSimplexSolver` | Simplex + BnB | 0/1 integer | exponential | ✓ |
-| `GomoryCutSolver` | Cutting planes + Dual Simplex | 0/1 integer | có thể không hội tụ, polynomial cho LP-rank thấp | ✓ khi hội tụ |
+| `GomoryCutSolver` | Cutting planes + Dual Simplex | 0/1 integer | có thể không hội tụ | ✓ khi hội tụ |
 
 ---
 
 ### 1. `src/algorithms/basic/` — Thuật toán cơ bản
 
 #### `greedy.py` — Tham lam (Greedy)
-
-Sắp xếp vật phẩm giảm dần theo **mật độ giá trị** `v_i / w_i`, sau đó chọn lần lượt vật phẩm có mật độ cao nhất nếu còn vừa túi.
-
+Sắp xếp vật phẩm giảm dần theo **mật độ giá trị** $v_i / w_i$, sau đó chọn lần lượt vật phẩm có mật độ cao nhất nếu còn vừa túi.
 - **Fractional**: nếu vật phẩm cuối không vừa hết, lấy phần fractional cuối cho khít. Thuật toán này **tối ưu chứng minh được** cho LP relaxation (Dantzig 1957) — đây cũng chính là baseline ground-truth của project để verify các Simplex solvers.
-- **0/1 Greedy**: dừng ngay khi vật phẩm tiếp theo không vừa. **Không tối ưu**, có thể sai rất xa (worst case approximation ratio = 1/2 nếu thêm trick "best single item").
+- **0/1 Greedy**: dừng ngay khi vật phẩm tiếp theo không vừa. **Không tối ưu**, có thể sai lệch lớn (worst case approximation ratio = 1/2).
 
-Độ phức tạp `O(n log n)` (chỉ tốn ở sort). Trên `n=1000`: ~0.1ms.
+Độ phức tạp $O(n \log n)$ (chỉ tốn ở bước sắp xếp). Trên $n=1000$: thời gian thực thi cỡ $\sim 0.1\text{ms}$.
 
 #### `dp.py` — Quy hoạch động (Dynamic Programming)
-
-Bảng `dp[i][w]` = giá trị tối đa khi xét i vật phẩm đầu và sức chứa w. Quan hệ truy hồi:
+Bảng $dp[i][w]$ = giá trị tối đa khi xét $i$ vật phẩm đầu và sức chứa $w$. Quan hệ truy hồi:
 
 $$dp[i][w] = \max\left( dp[i-1][w],\ dp[i-1][w-w_i] + v_i \right)$$
 
-- **Pseudo-polynomial**: `O(n·W)` thời gian và bộ nhớ. Khi `W ≤ 10⁴` là rất nhanh; khi `W ≥ 10⁵` (như suite `benchmark_stress`) DP có thể OOM.
-- **DPUnbounded** dùng cùng bảng nhưng cho phép `dp[i-1] → dp[i]` (cùng dòng), enabling vật phẩm được lấy nhiều lần.
+- **Pseudo-polynomial**: $O(n \cdot W)$ thời gian và bộ nhớ. Khi $W \le 10^4$ chạy rất nhanh; khi $W \ge 10^5$ (như suite `benchmark_stress`) DP có thể bị OOM.
+- **DPUnbounded** dùng cùng bảng nhưng cho phép lấy một vật phẩm nhiều lần (truy hồi trên cùng dòng $i$).
 
 #### `backtracking.py` — Quay lui
-
-Duyệt cây nhị phân `2ⁿ` (chọn / không chọn từng vật phẩm), với cắt tỉa: dừng nhánh nếu trọng lượng đã vượt `W`. Không có upper bound function nên **chậm** so với Branch & Bound, dùng làm baseline so sánh hiệu quả của cắt tỉa.
+Duyệt cây nhị phân $2^n$ (chọn / không chọn từng vật phẩm), có cắt tỉa đơn giản: dừng nhánh nếu trọng lượng vượt quá $W$. Không có hàm chặn (upper bound function) nên chạy **chậm** trên tập lớn, dùng làm baseline để so sánh hiệu quả cắt tỉa.
 
 #### `branch_and_bound.py` — Nhánh cận
-
-Giống Backtracking nhưng thêm **upper bound function**: tại mỗi nút, ước lượng best-case giá trị còn lại bằng **LP relaxation** (greedy fractional trên các vật phẩm chưa quyết định). Nếu upper bound ≤ best-so-far, cắt nhánh ngay.
-
-- Sắp xếp items theo mật độ trước khi duyệt → DFS theo branching variable ordering tốt nhất.
-- Trên các instance benchmark n=100, BnB chạy `~1ms` trong khi DP chạy `~1s` — vì BnB tận dụng được cấu trúc bài, DP thì phải build toàn bảng O(n·W).
+Duyệt cây nhưng có thêm **hàm cận trên (upper bound function)**: ước lượng giá trị tối đa khả thi của nhánh bằng **LP relaxation** (greedy fractional trên các vật phẩm chưa quyết định). Nếu upper bound $\le$ best-so-far, thực hiện cắt nhánh lập tức.
+- Các vật phẩm được sắp xếp theo mật độ trước khi duyệt để tối ưu hóa thứ tự nhánh DFS.
+- Trên các instance benchmark $n=100$, BnB chạy chỉ mất $\sim 1\text{ms}$ trong khi DP mất $\sim 1\text{s}$ do BnB không phải duyệt và dựng toàn bộ bảng lớn.
 
 ---
 
-### 2. `src/algorithms/simplex/` — Thuật toán Đơn hình ⭐
+### 2. `src/algorithms/simplex/` — Thuật toán Đơn hình
 
-Đây là phần được implement chi tiết nhất trong project, với **5 solvers** xoay quanh phương pháp Đơn hình. Mục tiêu là giải LP relaxation và sau đó **dùng kết quả LP để tìm nghiệm nguyên** cho bài 0/1 Knapsack.
+Đây là phần được cài đặt chi tiết trong project, gồm **5 solvers** xoay quanh phương pháp Đơn hình (Simplex) phục vụ giải LP relaxation và tìm nghiệm nguyên cho bài toán Cái túi 0/1.
 
-#### Dạng LP chuẩn
-
-Knapsack LP relaxation được đưa về dạng:
+#### Đưa về dạng LP chuẩn
+Bài toán Knapsack LP relaxation được biểu diễn dưới dạng:
 
 $$\max c^T x \quad \text{s.t.} \quad A x \leq b,\ x \geq 0$$
 
 với:
-- `c = (v_1, ..., v_n)` — vector giá trị
-- Hàng đầu của `A` là `(w_1, ..., w_n)` với `b_1 = W` (ràng buộc capacity)
-- `n` hàng tiếp theo: `x_i ≤ 1` (upper bound mỗi vật phẩm)
-- Tổng cộng: `m = n+1` constraints, `n` decision variables, plus `m` slack variables sau khi chuẩn hóa.
+- $c = (v_1, \dots, v_n)$ — vector giá trị.
+- Ràng buộc đầu tiên của $A$: $(w_1, \dots, w_n) \le W$ (sức chứa).
+- $n$ ràng buộc tiếp theo: $x_i \le 1$ (giới hạn mỗi vật phẩm chỉ lấy tối đa 1 phần).
+- Tổng cộng: $m = n+1$ ràng buộc, $n$ biến quyết định, cộng thêm $m$ biến bù (slack variables) sau khi chuẩn hóa.
 
-File `base_simplex.py` chứa hàm `_convert_to_lp_form()` thực hiện chuyển đổi này. Hàm `_filter_redundant_constraints()` loại bỏ ràng buộc trùng lặp (chỉ giữ RHS tighter nhất cho mỗi pattern hệ số) — **chú ý**: filter này được rewrite từ thuật toán Gauss O(n⁴) gốc sang dedup O(n·m) sau khi phát hiện filter Gauss tốn ~3-5 giờ chỉ để xác nhận điều hiển nhiên cho LP knapsack.
+Hàm `_convert_to_lp_form()` trong `base_simplex.py` đảm nhận việc chuyển đổi này. Cơ chế lọc ràng buộc dư thừa `_filter_redundant_constraints()` giúp loại bỏ các ràng buộc trùng lặp, tối ưu hóa kích thước ma trận Tableau.
 
 #### `primal_simplex.py` — Primal Simplex (Hai pha)
+Cài đặt **Phương pháp Hai pha (Two-Phase Method)** chuẩn:
+- **Pha I**: Thêm biến giả (artificial variables) để tìm điểm cơ sở khả thi ban đầu (BFS). Nếu giá trị tối ưu Pha I $> 0$, bài toán vô nghiệm khả thi (infeasible).
+- **Pha II**: Khôi phục hàm mục tiêu gốc và tiến hành tối ưu hóa bằng các bước xoay Tableau (pivot).
 
-Implement **Phương pháp Hai pha (Two-Phase Method)** chuẩn, dùng khi xuất phát từ một LP có thể không có nghiệm khả thi ban đầu:
-
-**Pha I** — Tìm điểm cơ sở khả thi (Basic Feasible Solution, BFS):
-- Thêm **biến giả (artificial variables)** `a_i` cho mỗi ràng buộc có `b_i < 0`.
-- Giải LP phụ: `min Σ a_i` (tương đương `max -Σ a_i`).
-- Nếu giá trị tối ưu = 0, các biến giả bị đẩy ra khỏi cơ sở → BFS hợp lệ cho bài gốc. Nếu > 0, bài gốc **bất khả thi** (infeasible).
-
-**Pha II** — Tối ưu từ BFS:
-- Thay objective row bằng hàm mục tiêu gốc `max c^T x`.
-- Phục hồi dạng chính tắc (canonical form) bằng cách trừ các hàng cơ sở.
-- Iterate: chọn cột vào theo **Dantzig's rule** (entering variable = hệ số mục tiêu âm nhỏ nhất), chọn dòng ra theo **min ratio test**, pivot.
-
-Cài đặt hiện tại dùng `numpy.ndarray` cho tableau, vectorize pivot bằng `np.outer(factors, pivot_row)` thay cho triple-nested Python loop. Trên `n=500`, một LP relaxation chạy ~0.4 giây (trước khi vectorize: dự kiến ~5 giờ vì filter Gauss + Python loop).
+Bảng Tableau được lưu dưới dạng `numpy.ndarray`, bước xoay được vectorized bằng `np.outer` để tránh các vòng lặp lồng nhau trong Python, tăng tốc độ xử lý vượt bậc.
 
 #### `dual_simplex.py` — Dual Simplex
-
-**Khác biệt cốt lõi**: Dual Simplex bắt đầu từ một tableau **dual-feasible nhưng primal-infeasible** (đối ngẫu khả thi nhưng primal không khả thi — tức `b_i < 0` ở một số dòng). Ngược chiều Primal:
-- **Chọn dòng ra (leaving row) trước**: dòng có `b_i` âm nhất.
-- **Chọn cột vào (entering column) sau**: theo dual ratio test trên hàng đó.
-
-Tại sao quan trọng?
-- **Re-optimization sau khi thêm ràng buộc**: Sau khi thêm một cut (như Gomory), tableau cũ vẫn dual-feasible (objective row không đổi) nhưng có thể primal-infeasible (RHS âm). Dual Simplex re-optimize **không cần build lại từ đầu**.
-- **Sensitivity analysis**: Khi RHS thay đổi nhỏ, Dual Simplex là tool chuẩn để khôi phục optimality.
-
-File còn export `add_constraint()`, `update_rhs()`, `update_objective()` để hỗ trợ re-optimization, được Gomory Cut và Branch & Bound + Simplex sử dụng.
+Hoạt động ngược chiều với Primal Simplex: xuất phát từ trạng thái đối ngẫu khả thi (dual-feasible) nhưng primal-infeasible (tồn tại các giá trị biên âm $b_i < 0$):
+- **Bước 1**: Chọn hàng ra (leaving row) có giá trị biên âm nhất.
+- **Bước 2**: Chọn cột vào (entering column) thông qua kiểm định tỷ lệ đối ngẫu (dual ratio test).
+- **Ưu điểm**: Phù hợp tối ưu lại (re-optimization) cực nhanh khi thêm ràng buộc mới (như lát cắt Gomory hoặc chia nhánh BnB) mà không cần chạy lại Pha I từ đầu.
 
 #### `branch_and_bound.py` (trong simplex/) — Simplex + Branch & Bound
-
-Giải **0/1 Knapsack nguyên** bằng cách dùng LP relaxation làm hàm cận trên:
-
-1. Giải LP relaxation bằng Primal Simplex → được nghiệm `x*` (có thể fractional).
-2. Nếu `x*` đã nguyên → done.
-3. Nếu không, chọn một biến `x_j ∈ (0, 1)` để branching, tạo 2 nhánh:
-   - **Nhánh 0**: thêm ràng buộc `x_j = 0`, re-optimize bằng Dual Simplex.
-   - **Nhánh 1**: thêm ràng buộc `x_j = 1`, re-optimize.
-4. Cắt nhánh nếu LP bound ≤ best integer solution đã tìm.
-
-Khác `basic/branch_and_bound.py` ở chỗ: bản này dùng **Simplex** để tính bound (chính xác hơn về mặt LP theory), trong khi bản basic dùng greedy fractional. Trade-off: chính xác hơn nhưng chậm hơn vì mỗi nhánh phải re-optimize.
+Giải **0/1 Knapsack nguyên** bằng cách giải LP relaxation ở mỗi nút cây quyết định:
+1. Giải LP relaxation bằng Primal Simplex thu được nghiệm $x^*$.
+2. Nếu $x^*$ nguyên, cập nhật kỷ lục tốt nhất.
+3. Nếu chứa giá trị fractional, chọn biến $x_j$ không nguyên để chia hai nhánh: $x_j = 0$ (thêm ràng buộc $x_j \le 0$) và $x_j = 1$ (thêm ràng buộc $x_j \ge 1$), tối ưu lại bằng Dual Simplex.
 
 #### `gomory_cut.py` — Gomory Cutting Planes
+Giải pháp tìm nghiệm nguyên bằng cách siết chặt đa diện khả thi mà không chia nhánh:
+1. Giải LP relaxation thu được Tableau tối ưu chứa biến cơ sở fractional tại dòng $r$.
+2. Sinh lát cắt Gomory:
 
-Một phương pháp khác để tìm nghiệm nguyên từ LP relaxation, **không dùng branching**:
+$$\sum_{j \in \text{non-basic}} (a_{rj} - \lfloor a_{rj} \rfloor) x_j \geq (b_r - \lfloor b_r \rfloor)$$
 
-1. Giải LP relaxation, được tableau optimal với một số biến cơ sở fractional.
-2. Chọn dòng `r` có biến cơ sở fractional (gọi giá trị là `b̄_r`).
-3. Sinh ra **Gomory cut**:
+3. Thêm ràng buộc cắt này vào Tableau và tối ưu lại bằng Dual Simplex. Lặp lại cho đến khi đạt nghiệm nguyên.
 
-   $$\sum_{j \in \text{non-basic}} \{ \bar{a}_{rj} \} x_j \geq \{ \bar{b}_r \}$$
-
-   với `{x}` là phần thập phân của x. Cut này **không loại bỏ nghiệm nguyên hợp lệ nào** nhưng cắt được nghiệm fractional hiện tại.
-4. Thêm cut vào tableau và re-optimize bằng Dual Simplex.
-5. Lặp đến khi tất cả biến cơ sở nguyên (hoặc declare numerical failure).
-
-Lý thuyết Gomory đảm bảo hữu hạn iterations cho integer programs với LP có rank cố định. Trong thực tế, hội tụ phụ thuộc nhiều vào numerical precision — vì vậy implementation có epsilon cleanup ở mỗi pivot.
-
-#### Tại sao dùng Simplex cho bài đơn giản như Knapsack?
-
-Câu hỏi hợp lý vì Greedy fractional đã giải LP relaxation trong `O(n log n)`. Có 3 lý do để vẫn cài đặt:
-
-1. **Giáo dục**: Simplex là method nền tảng của Operations Research. Cài đặt từ con số 0 trên bài knapsack (LP đơn giản, có nghiệm phân tích để verify) là bài tập học thuật chuẩn.
-2. **Cầu nối sang Integer Programming**: Một khi có Simplex + Dual Simplex, ta có thể implement Branch & Bound (với simplex bound), Gomory cuts, Lagrangian relaxation, column generation... Tất cả đều cần Simplex hoặc Dual Simplex làm primitive.
-3. **Benchmark research**: Đo wall-time của pure Python + NumPy Simplex trên dải `n=100..1000` là **chỗ trống trong literature** — commercial solvers (CPLEX, Gurobi) báo cáo "<1ms" (không thú vị), benchmark papers focus ở `n > 10⁴`. Project này lấp khoảng trống đó. Xem chi tiết tại [`plans/reports/simplex-knapsack-lp-benchmarks-research.md`](plans/reports/simplex-knapsack-lp-benchmarks-research.md) và [`plans/reports/simplex-runtime-benchmarks-research.md`](plans/reports/simplex-runtime-benchmarks-research.md).
-
-#### Đo lường hiệu năng Simplex (verified)
-
-Trên LP relaxation knapsack với items sinh ngẫu nhiên, đo wall-time end-to-end (Two-Phase, single core, MacBook Apple Silicon, Python 3.11 + NumPy):
-
-| n | Greedy LP | PrimalSimplex | DualSimplex | Verify khớp |
-|---|----------:|--------------:|------------:|:-----------:|
-| 100 | 0.05 ms | 5 ms | 5 ms | ✓ |
-| 200 | 0.1 ms | 21 ms | 24 ms | ✓ |
-| 300 | 0.2 ms | 61 ms | 59 ms | ✓ |
-| 500 | 0.3 ms | 421 ms | 416 ms | ✓ |
-| 800 | 0.5 ms | 1.21 s | 1.15 s | ✓ |
-| 1000 | 0.6 ms | 3.33 s | 3.38 s | ✓ |
-
-Tất cả khớp tuyệt đối với Greedy LP (relative error < 1e-4). Scaling thực nghiệm rất gần `O(n³)`, đúng với kỳ vọng dense-tableau Simplex (số pivot ~O(n), chi phí mỗi pivot ~O(n²) khi dùng numpy vectorize).
+> [!WARNING]
+> **Lưu ý về hiệu năng thực nghiệm của Simplex:**
+> Bảng đo thời gian chạy thực tế dưới đây đo đạc trên môi trường chạy đơn nhân (single-core):
+>
+> | n | Greedy LP | PrimalSimplex | DualSimplex | Trạng thái kiểm thử |
+> | :---: | :---: | :---: | :---: | :---: |
+> | 100 | 0.05 ms | 5 ms | 5 ms | Khớp tuyệt đối (sai số < 1e-4) |
+> | 200 | 0.1 ms | 21 ms | 24 ms | Khớp tuyệt đối |
+> | 300 | 0.2 ms | 61 ms | 59 ms | Khớp tuyệt đối |
+> | 500 | 0.3 ms | 421 ms | 416 ms | Khớp tuyệt đối |
+> | 800 | 0.5 ms | 1.21 s | 1.15 s | Khớp tuyệt đối |
+> | 1000 | 0.6 ms | 3.33 s | 3.38 s | Khớp tuyệt đối |
+>
+> Đường cong tăng trưởng thời gian chạy thực nghiệm tiệm cận sát mức $O(n^3)$.
 
 ---
 
-## 📦 Phụ thuộc
+## 📦 Các thư viện phụ thuộc
 
-```
-numpy
-pandas
-matplotlib
-seaborn
-scipy
-tqdm
-flask
-```
+Dự án sử dụng các gói thư viện chuẩn trong khoa học dữ liệu:
+- `numpy`
+- `pandas`
+- `matplotlib`
+- `seaborn`
+- `scipy`
+- `tqdm`
+- `flask`
 
-Tất cả đã được liệt kê trong `requirements.txt`.
+Mọi thư viện đã được liệt kê chi tiết trong tệp [requirements.txt](requirements.txt).
 
 ---
 
@@ -338,4 +306,4 @@ Tất cả đã được liệt kê trong `requirements.txt`.
 - **Lê Sỹ Thức**
 - **Nguyễn Hải Anh**
 
-Project này là sản phẩm hợp tác phục vụ mục đích nghiên cứu — học tập về Operations Research và Combinatorial Optimization.
+Dự án này là sản phẩm hợp tác phục vụ mục đích nghiên cứu — học tập về Operations Research và Combinatorial Optimization.
