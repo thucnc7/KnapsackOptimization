@@ -1,6 +1,6 @@
 # 📊 Notebooks & Plotting Analytics - Phân tích & Đồ thị thống kê
 
-Thư mục này chứa các công cụ hỗ trợ phân tích kết quả sau benchmark và tự động vẽ các đồ thị thống kê chất lượng cao để chèn trực tiếp vào báo cáo thực nghiệm LaTeX và slide thuyết trình.
+Thư mục này chứa các công cụ hỗ trợ phân tích kết quả sau benchmark và tự động vẽ các đồ thị thống kê chất lượng cao phục vụ phân tích thực nghiệm.
 
 ---
 
@@ -43,7 +43,7 @@ python notebooks/execute_notebook.py
 ```
 
 > [!TIP]
-> Khi chạy thành công, các đồ thị dạng PNG sắc nét (300 DPI) sẽ tự động được xuất ra thư mục `results/plots/` và **đồng thời được sao chép trực tiếp sang thư mục hình ảnh của LaTeX** (`latex/image/` và `mainLatex/image/`) để cập nhật báo cáo LaTeX của bạn ngay lập tức.
+> Khi chạy thành công, các đồ thị dạng PNG sắc nét (300 DPI) sẽ tự động được xuất ra thư mục `results/plots/` phục vụ việc phân tích trực quan.
 
 ### Cách 2: Chạy tương tác trên giao diện Jupyter
 Nếu bạn muốn chỉnh sửa, tương tác hoặc kiểm tra trực tiếp các dòng mã phân tích:

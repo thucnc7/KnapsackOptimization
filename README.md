@@ -16,7 +16,7 @@ Repo được tổ chức theo nguyên tắc **tách biệt rõ ràng các lớp
 | **`data/`** | Sinh test instances theo `test_scenarios.json` (Gaussian jitter + rejection sampling), kiểm tra chất lượng phân phối, output JSON instances | Khi muốn tạo dữ liệu thực nghiệm mới hoặc verify chất lượng dataset |
 | **`benchmark/`** | Runner độc lập process-isolated với timeout + OOM protection, đo wall time + peak memory bằng `tracemalloc` | Khi chạy benchmark trên toàn bộ test suite, output CSV |
 | **`webapp/`** | Flask + vanilla JS + Chart.js dashboard với 7 modes, cho phép chạy live solver trong trình duyệt | Khi muốn khám phá kết quả tương tác, demo cho người khác xem |
-| **`notebooks/`** | Sinh và execute Jupyter notebook tự động → xuất PNG (scatter, curve fitting, comparison plots) | Khi cần báo cáo định lượng dạng PDF/LaTeX với biểu đồ chất lượng publication |
+| **`notebooks/`** | Sinh và execute Jupyter notebook tự động → xuất PNG (scatter, curve fitting, comparison plots) | Khi cần vẽ biểu đồ phân tích hiệu năng phục vụ báo cáo định lượng |
 | **`results/`** | Output: `csv/` (raw benchmark), `quality/` (phân tích dữ liệu), `plots/` (biểu đồ thực nghiệm) | Chứa và lưu trữ kết quả đầu ra của các đo đạc |
 | **`plans/`** | Research reports về thuật toán (so sánh literature), implementation plans cho features mới | Khi nghiên cứu lý thuyết hoặc theo dõi quyết định thiết kế |
 | **`main.py`** | Demo entry point: chạy 6 solvers trên 1 instance n=30, in bảng so sánh | Smoke test sau khi sửa code |
