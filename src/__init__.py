@@ -6,11 +6,11 @@ from src.algorithms.base import (
     FractionalKnapsackMixin,
 )
 from src.algorithms.basic import (
+    GreedyKnapsackSolver,
     DPKnapsackSolver,
     BacktrackingSolver,
     BranchAndBoundSolver,
 )
-from src.algorithms.greedy import GreedyKnapsackSolver
 
 __all__ = [
     "Item",

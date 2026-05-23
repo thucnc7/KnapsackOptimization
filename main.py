@@ -10,8 +10,8 @@ from src.algorithms.basic import (
     BacktrackingSolver,
     BranchAndBoundSolver,
     DPKnapsackSolver,
+    GreedyKnapsackSolver,
 )
-from src.algorithms.greedy import GreedyKnapsackSolver
 from src.algorithms.simplex import (
     PrimalSimplexSolver,
     DualSimplexSolver,

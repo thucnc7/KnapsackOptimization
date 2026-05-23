@@ -91,11 +91,11 @@ KnapsackOptimization/
 │   ├── models.py               Item, KnapsackInstance, metadata
 │   └── algorithms/
 │       ├── base.py             BaseSolver + ZeroOne/Fractional/Unbounded mixins
-│       ├── basic/              Thuật toán exact cơ bản cho 0/1 Knapsack
+│       ├── basic/              Thuật toán cơ bản cho Knapsack
+│       │   ├── greedy.py       Greedy01 (heuristic) + GreedyFractional (LP optimal)
 │       │   ├── dp.py           Quy hoạch động (DP, DPUnbounded)
 │       │   ├── backtracking.py Quay lui có cắt tỉa
 │       │   └── branch_and_bound.py  Nhánh cận với LP relaxation bound
-│       ├── greedy.py           Greedy01 (heuristic) + GreedyFractional (LP optimal)
 │       └── simplex/            LP solvers vectorized với numpy
 │           ├── base_simplex.py        LP form conversion + dedup constraints
 │           ├── primal_simplex.py      Two-Phase Primal Simplex
