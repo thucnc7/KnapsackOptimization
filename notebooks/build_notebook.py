@@ -93,6 +93,18 @@ PLOTS.mkdir(parents=True, exist_ok=True)
 def save(fig, name):
     fig.savefig(PLOTS / name, dpi=300, bbox_inches="tight", facecolor=FIG_BG)
     print(f"Saved -> {PLOTS / name}")
+    import shutil
+    latex_dir = None
+    for p in [ROOT] + list(ROOT.parents):
+        if (p / "latex" / "report.tex").exists() or (p / "latex" / "report_thucnghiem.tex").exists():
+            latex_dir = p / "latex"
+            break
+    if latex_dir and latex_dir.exists():
+        latex_img = latex_dir / "image"
+        target = latex_img / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(PLOTS / name, target)
+        print(f"Copied to latex -> {target}")
 
 print("Root:", ROOT)\
 """))
@@ -285,10 +297,14 @@ else:
 CELLS.append(md("""\
 ## 4 · Comparative Overview Plots
 
-We generate three summary plots to compare algorithms directly:
+We generate several summary plots to compare algorithms directly:
 1. **Execution Status Comparison:** Stacked bar chart of Success, Timeout, and Error rates.
 2. **Peak Memory Comparison:** Box plot of maximum memory usage per solver on successful runs.
-3. **Median Runtime comparison vs N:** Line plot of median runtime vs N for all solvers.\
+3. **Median Runtime comparison vs N:** Split into 4 separate plots classified by Knapsack problem types:
+   - **`runtime_comparison_01_small.png`**: Exact & Greedy solvers for 0/1 Knapsack (N <= 50)
+   - **`runtime_comparison_01_large.png`**: Large-scale solvers for 0/1 Knapsack (N <= 1000)
+   - **`runtime_comparison_unbounded.png`**: Unbounded Knapsack solvers vs 0/1 DP (N <= 1000)
+   - **`runtime_comparison_fractional.png`**: Fractional Knapsack solvers (N <= 1000)\
 """))
 
 CELLS.append(code("""\
@@ -303,6 +319,7 @@ status_counts.plot(kind="barh", stacked=True, color=["#00d4aa", "#ff6b6b", "#ffd
 style_ax(ax, "Algorithm Execution Status Overview", "Count", "Algorithm")
 ax.legend(title="Status", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR)
 fig.tight_layout()
+fig.subplots_adjust(top=0.90)
 save(fig, "algo_status_comparison.png")
 plt.show()
 
@@ -324,12 +341,37 @@ if not df_ok.empty:
     plt.xticks(rotation=30, ha="right")
     style_ax(ax, "Peak Memory Usage Comparison (Log Scale)", "Algorithm", "Peak Memory (MB)")
     fig.tight_layout()
+    fig.subplots_adjust(top=0.90)
     save(fig, "memory_comparison.png")
     plt.show()
 
-# 3. Runtime Comparison vs N
-fig, ax = plt.subplots(figsize=(10, 6), facecolor=FIG_BG)
-for algo in ALGOS:
+# 3. Runtime Comparison vs N (Classified by Knapsack Problem Types)
+# 3a. 0/1 Knapsack - Small-Scale (Exact & Greedy)
+fig, ax = plt.subplots(figsize=(8, 5), facecolor=FIG_BG)
+exact_algos = ["Backtracking", "BranchAndBound", "DP", "SimplexBnB", "GomoryCut", "Greedy01"]
+for algo in exact_algos:
+    if algo not in ALGOS:
+        continue
+    sub = df_ok[(df_ok["algorithm"] == algo) & (df_ok["n"] <= 50)]
+    if sub.empty or sub["n"].nunique() < 2:
+        continue
+    medians = sub.groupby("n")["time_sec"].median().reset_index()
+    ax.plot(medians["n"], medians["time_sec"], "o-", color=PAL[algo], label=algo, lw=2, ms=5)
+ax.set_yscale("log")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.2g}s"))
+style_ax(ax, "Median Runtime: 0/1 Knapsack - Small Scale (N <= 50, Log Scale)", "N (items)", "Runtime (seconds)")
+ax.legend(title="Algorithm", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR)
+fig.tight_layout()
+fig.subplots_adjust(top=0.90)
+save(fig, "runtime_comparison_01_small.png")
+plt.show()
+
+# 3b. 0/1 Knapsack - Large-Scale (DP & Greedy)
+fig, ax = plt.subplots(figsize=(8, 5), facecolor=FIG_BG)
+large_01_algos = ["DP", "Greedy01"]
+for algo in large_01_algos:
+    if algo not in ALGOS:
+        continue
     sub = df_ok[(df_ok["algorithm"] == algo) & (df_ok["n"] <= 1000)]
     if sub.empty or sub["n"].nunique() < 2:
         continue
@@ -337,10 +379,52 @@ for algo in ALGOS:
     ax.plot(medians["n"], medians["time_sec"], "o-", color=PAL[algo], label=algo, lw=2, ms=5)
 ax.set_yscale("log")
 ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.2g}s"))
-style_ax(ax, "Median Runtime Comparison vs. N (N <= 1000, Log Scale)", "N (items)", "Runtime (seconds)")
-ax.legend(title="Algorithm", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR, loc="upper left", bbox_to_anchor=(1.02, 1))
+style_ax(ax, "Median Runtime: 0/1 Knapsack - Large Scale (N <= 1000, Log Scale)", "N (items)", "Runtime (seconds)")
+ax.legend(title="Algorithm", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR)
 fig.tight_layout()
-save(fig, "runtime_comparison_vs_n.png")
+fig.subplots_adjust(top=0.90)
+save(fig, "runtime_comparison_01_large.png")
+plt.show()
+
+# 3c. Unbounded Knapsack (DPUnbounded vs DP 0/1 reference)
+fig, ax = plt.subplots(figsize=(8, 5), facecolor=FIG_BG)
+unbounded_algos = ["DPUnbounded", "DP"]
+for algo in unbounded_algos:
+    if algo not in ALGOS:
+        continue
+    sub = df_ok[(df_ok["algorithm"] == algo) & (df_ok["n"] <= 1000)]
+    if sub.empty or sub["n"].nunique() < 2:
+        continue
+    medians = sub.groupby("n")["time_sec"].median().reset_index()
+    label_name = f"{algo} (0/1 Ref)" if algo == "DP" else algo
+    ax.plot(medians["n"], medians["time_sec"], "o-", color=PAL[algo], label=label_name, lw=2, ms=5)
+ax.set_yscale("log")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.2g}s"))
+style_ax(ax, "Median Runtime: Unbounded Knapsack (N <= 1000, Log Scale)", "N (items)", "Runtime (seconds)")
+ax.legend(title="Algorithm", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR)
+fig.tight_layout()
+fig.subplots_adjust(top=0.90)
+save(fig, "runtime_comparison_unbounded.png")
+plt.show()
+
+# 3d. Fractional Knapsack Solvers
+fig, ax = plt.subplots(figsize=(8, 5), facecolor=FIG_BG)
+fractional_algos = ["GreedyFractional", "PrimalSimplex", "DualSimplex"]
+for algo in fractional_algos:
+    if algo not in ALGOS:
+        continue
+    sub = df_ok[(df_ok["algorithm"] == algo) & (df_ok["n"] <= 1000)]
+    if sub.empty or sub["n"].nunique() < 2:
+        continue
+    medians = sub.groupby("n")["time_sec"].median().reset_index()
+    ax.plot(medians["n"], medians["time_sec"], "o-", color=PAL[algo], label=algo, lw=2, ms=5)
+ax.set_yscale("log")
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.2g}s"))
+style_ax(ax, "Median Runtime: Fractional Knapsack (N <= 1000, Log Scale)", "N (items)", "Runtime (seconds)")
+ax.legend(title="Algorithm", facecolor=AX_BG, edgecolor=GRID_CLR, labelcolor=TEXT_CLR)
+fig.tight_layout()
+fig.subplots_adjust(top=0.90)
+save(fig, "runtime_comparison_fractional.png")
 plt.show()
 """))
 
