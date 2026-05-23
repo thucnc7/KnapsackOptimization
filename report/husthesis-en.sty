@@ -83,19 +83,13 @@
 
 \newsavebox\thesmashminipage
 \newenvironment{smashminipage}
-  {\begin{lrbox}{\thesmashminipage}\begin{minipage}[t]{\textwidth}}
+  {\begin{lrbox}{\thesmashminipage}\begin{minipage}[t][22cm][t]{\textwidth}}
   {\end{minipage}\end{lrbox}\smash{\usebox{\thesmashminipage}}\clearpage}
 
 \def\coverpage{
 \pagestyle{empty}
-% \setlength{\oddsidemargin}{0cm}
-% \addtolength{\voffset}{-2.5cm}
-% \addtolength{\textwidth}{-2cm}
-
-% \fbox{
-\begin{smashminipage}%[b][25.5cm][t]{15cm}
+\begin{smashminipage}
 \begin{tikzpicture}[remember picture, overlay]
-%   \draw[line width = 4pt] ($(current page.north west) + (1in,-1in)$) rectangle ($(current page.south east) + (-1in,1in)$);
 \draw [line width=1pt]
     ($ (current page.north west) + (2.0cm,-2.0cm) $)
     rectangle
@@ -107,46 +101,45 @@
 \end{tikzpicture}
 
 \begin{center}
-{\fontsize{13}{1}\selectfont
-TRƯỜNG ĐẠI HỌC KHOA HỌC TỰ NHIÊN\\
-ĐẠI HỌC QUỐC GIA HÀ NỘI\\
-\textbf{\@sdeptname}
-}\\
-\vspace{3.5cm}
-{\fontsize{14}{1}\selectfont \textbf{\@stuname}}
-
-\vspace{2cm}
-
-  {\fontsize{18}{1}\selectfont \textbf{\@tname} }
-\vspace{5cm}  
-  
- {\fontsize{14}{1}\selectfont \@rname  \\[6pt]
- 	Chuyên ngành: \@sMajor \\[6pt]
-	%(\@sProgram\\ Program)\\ 
-     
-}
- 
-\vspace{4.5cm}
- 
- {\fontsize{14}{1}\selectfont  \textbf{ Hà Nội - \@ttime } }\\
-
+    {\fontsize{12}{13}\selectfont ĐẠI HỌC QUỐC GIA HÀ NỘI \\}
+    {\fontsize{13}{14}\selectfont \textbf{TRƯỜNG ĐẠI HỌC KHOA HỌC TỰ NHIÊN} \\}
+    {\fontsize{12}{13}\selectfont \textbf{\MakeUppercase{\@sdeptname}} \\}
+    \vspace{0.3cm}
+    \rule{6cm}{1pt} \\
+    
+    \vfill
+    
+    {\fontsize{14}{16}\selectfont \textbf{BÁO CÁO BÀI TẬP LỚN} \\}
+    {\fontsize{13}{14}\selectfont Môn học: \@rname \\}
+    
+    \vspace{1.5cm}
+    
+    {\fontsize{18}{22}\selectfont \textbf{\@tname} \\}
+    
+    \vfill
+    \vfill
+    
+    \begin{minipage}{0.7\textwidth}
+        {\fontsize{13}{16}\selectfont
+        \begin{tabular}{ll}
+            \textbf{Sinh viên thực hiện:}  & \begin{tabular}[t]{@{}l@{}} \@stuname \end{tabular} \\
+            \textbf{Chuyên ngành:}         & \@sMajor
+        \end{tabular}
+        }
+    \end{minipage}
+    
+    \vfill
+    
+    {\fontsize{13}{14}\selectfont \textbf{Hà Nội, \@ttime} \\}
 \end{center}
-
 \end{smashminipage}
 }
 
 
 \def\secondcoverpage{
-
 \pagestyle{empty}
-% \setlength{\oddsidemargin}{0cm}
-% \addtolength{\voffset}{-2.5cm}
-% \addtolength{\textwidth}{-2cm}
-
-% \fbox{
-\begin{smashminipage}%[b][25.5cm][t]{15cm}
+\begin{smashminipage}
 \begin{tikzpicture}[remember picture, overlay]
-%   \draw[line width = 4pt] ($(current page.north west) + (1in,-1in)$) rectangle ($(current page.south east) + (-1in,1in)$);
 \draw [line width=1pt]
     ($ (current page.north west) + (3.0cm,-2.0cm) $)
     rectangle
@@ -158,36 +151,37 @@ TRƯỜNG ĐẠI HỌC KHOA HỌC TỰ NHIÊN\\
 \end{tikzpicture}
 
 \begin{center}
-{\fontsize{13}{1}\selectfont
-TRƯỜNG ĐẠI HỌC KHOA HỌC TỰ NHIÊN\\
-ĐẠI HỌC QUỐC GIA HÀ NỘI\\
-\textbf{\@sdeptname}
-}\\
-\vspace{3.5cm}
-{\fontsize{14}{1}\selectfont \textbf{\@stuname}}
-
-\vspace{2cm}
-
-  {\fontsize{18}{1}\selectfont \textbf{\@tname} }
-\vspace{4cm}  
-  
- {\fontsize{14}{1}\selectfont \@rname  \\[6pt]
- 	Chuyên ngành: \@sMajor \\[6pt]
-%	(\@sProgram\ Program)\\ 
-     
-}
-\vspace{2cm}
-
-%{\fontsize{14}{1}\selectfont	\textbf{Supervisor:  %{\@sSupervise} \\	
-%}} 
- 
- 
-\vspace{4cm}
- 
- {\fontsize{14}{1}\selectfont \textbf{ Hà Nội - \@ttime } }\\
-
+    {\fontsize{12}{13}\selectfont ĐẠI HỌC QUỐC GIA HÀ NỘI \\}
+    {\fontsize{13}{14}\selectfont \textbf{TRƯỜNG ĐẠI HỌC KHOA HỌC TỰ NHIÊN} \\}
+    {\fontsize{12}{13}\selectfont \textbf{\MakeUppercase{\@sdeptname}} \\}
+    \vspace{0.3cm}
+    \rule{6cm}{1pt} \\
+    
+    \vfill
+    
+    {\fontsize{14}{16}\selectfont \textbf{BÁO CÁO BÀI TẬP LỚN} \\}
+    {\fontsize{13}{14}\selectfont Môn học: \@rname \\}
+    
+    \vspace{1.5cm}
+    
+    {\fontsize{18}{22}\selectfont \textbf{\@tname} \\}
+    
+    \vfill
+    \vfill
+    
+    \begin{minipage}{0.7\textwidth}
+        {\fontsize{13}{16}\selectfont
+        \begin{tabular}{ll}
+            \textbf{Sinh viên thực hiện:}  & \begin{tabular}[t]{@{}l@{}} \@stuname \end{tabular} \\
+            \textbf{Chuyên ngành:}         & \@sMajor
+        \end{tabular}
+        }
+    \end{minipage}
+    
+    \vfill
+    
+    {\fontsize{13}{14}\selectfont \textbf{Hà Nội, \@ttime} \\}
 \end{center}
-
 \end{smashminipage}
 }
 
