@@ -157,6 +157,9 @@ KnapsackOptimization/
 │   ├── build_notebook.py       # Sinh `.ipynb` từ template
 │   └── execute_notebook.py     # Run notebook → xuất PNG vào results/plots
 │
+├── report/                     # Báo cáo thực nghiệm khoa học chi tiết (LaTeX)
+│   ├── report.tex              # Mã nguồn báo cáo
+│   └── report.pdf              # Báo cáo đã biên dịch hoàn chỉnh
 ├── results/                    # Output: csv, plots, quality images
 ├── plans/                      # Báo cáo nghiên cứu & Kế hoạch thực hiện
 ├── main.py                     # Demo nhỏ chạy 6 solvers trên 1 instance n=30
@@ -297,6 +300,23 @@ Dự án sử dụng các gói thư viện chuẩn trong khoa học dữ liệu:
 - `flask`
 
 Mọi thư viện đã được liệt kê chi tiết trong tệp [requirements.txt](requirements.txt).
+
+---
+
+## 📝 Hướng dẫn biên dịch Báo cáo LaTeX
+
+Báo cáo chi tiết định dạng chuẩn học thuật được đặt tại thư mục [`report/`](report/). Bạn có thể sử dụng bản PDF biên dịch sẵn [`report/report.pdf`](report/report.pdf) hoặc tự biên dịch lại cục bộ bằng lệnh:
+
+```bash
+cd report
+xelatex report.tex
+bibtex report.aux
+xelatex report.tex
+xelatex report.tex
+```
+
+> [!NOTE]
+> Khuyến nghị sử dụng trình biên dịch **XeLaTeX** thay cho pdflatex để xử lý Unicode tiếng Việt tốt nhất khi biên dịch báo cáo này.
 
 ---
 

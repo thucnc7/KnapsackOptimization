@@ -43,7 +43,7 @@ python notebooks/execute_notebook.py
 ```
 
 > [!TIP]
-> Khi chạy thành công, các đồ thị dạng PNG sắc nét (300 DPI) sẽ tự động được xuất ra thư mục `results/plots/` phục vụ việc phân tích trực quan.
+> Khi chạy thành công, các đồ thị dạng PNG sắc nét (300 DPI) sẽ tự động được xuất ra thư mục `results/plots/` và đồng thời tự động sao chép sang thư mục `report/image/` để phục vụ việc đồng bộ báo cáo.
 
 ### Cách 2: Chạy tương tác trên giao diện Jupyter
 Nếu bạn muốn chỉnh sửa, tương tác hoặc kiểm tra trực tiếp các dòng mã phân tích:

@@ -94,6 +94,16 @@ def save(fig, name):
     fig.savefig(PLOTS / name, dpi=300, bbox_inches="tight", facecolor=FIG_BG)
     print(f"Saved -> {PLOTS / name}")
     import shutil
+    # Copy to repository report folder if exists
+    repo_report_dir = ROOT / "report"
+    if repo_report_dir.exists():
+        report_img = repo_report_dir / "image"
+        target = report_img / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(PLOTS / name, target)
+        print(f"Copied to repo report -> {target}")
+
+    # Copy to separate latex folder if exists in parent folders
     latex_dir = None
     for p in [ROOT] + list(ROOT.parents):
         if (p / "latex" / "report.tex").exists() or (p / "latex" / "report_thucnghiem.tex").exists():
