@@ -1,40 +1,74 @@
-from data.generator import generate_mdmkp_instance
-from src.algorithms.alns.core import ALNSConfig
-from src.algorithms.mdmkp.alns_solver import MDMKPALNSSolver
-from src.algorithms.mdmkp.greedy import GreedyMDMKP
+"""Quick demo: solve a single 0/1 Knapsack instance with each algorithm."""
+
+from __future__ import annotations
+
+import random
+import time
+
+from src.models import Item, KnapsackInstance
+from src.algorithms.basic import (
+    BacktrackingSolver,
+    BranchAndBoundSolver,
+    DPKnapsackSolver,
+)
+from src.algorithms.greedy import GreedyKnapsackSolver
+from src.algorithms.simplex import (
+    PrimalSimplexSolver,
+    DualSimplexSolver,
+)
 
 
-def main():
-    # Tao instance: 50 vat pham, 3 balo, 3 chieu (weight, volume, energy)
-    instance = generate_mdmkp_instance(
-        n_items=50,
-        n_knapsacks=3,
-        n_dimensions=3,
-        capacity_ratio=0.6,
-        seed=42,
-    )
-    print(f"Instance: {instance}")
-    print(f"  Items: {instance.n_items}, Knapsacks: {instance.n_knapsacks}, Dimensions: {instance.n_dimensions}")
+def _make_instance(n: int = 30, seed: int = 42) -> KnapsackInstance:
+    rng = random.Random(seed)
+    items = [
+        Item(id=i, weight=float(rng.randint(1, 100)), value=float(rng.randint(10, 200)))
+        for i in range(n)
+    ]
+    capacity = sum(it.weight for it in items) * 0.5
+    return KnapsackInstance(items=items, capacity=capacity)
+
+
+def _row(name: str, value: float, runtime: float, items_count: int) -> str:
+    return f"  {name:<22} value={value:>12.2f}   time={runtime*1000:>9.3f} ms   items={items_count}"
+
+
+def main() -> None:
+    instance = _make_instance(n=30, seed=42)
+    n = len(instance.items)
+    cap = instance.capacity
+    print(f"Instance: n={n}, capacity={cap:.2f}")
+    print(f"  total weight = {sum(it.weight for it in instance.items):.2f}")
+    print(f"  total value  = {sum(it.value for it in instance.items):.2f}")
     print()
 
-    # --- Greedy ---
-    greedy_solution = GreedyMDMKP(instance).solve()
-    print(f"[Greedy]  {greedy_solution}")
+    print("--- Exact 0/1 solvers (basic) ---")
+    for name, factory in [
+        ("DP", DPKnapsackSolver),
+        ("BranchAndBound", BranchAndBoundSolver),
+        ("Backtracking", BacktrackingSolver),
+    ]:
+        solver = factory(instance)
+        t0 = time.perf_counter()
+        value, selected = solver.solve_zero_one()
+        runtime = time.perf_counter() - t0
+        print(_row(name, value, runtime, len(selected)))
 
-    # --- ALNS ---
-    config = ALNSConfig(max_iterations=5000, seed=42)
-    result = MDMKPALNSSolver(instance, config).solve()
-    print(f"[ALNS]    value={result.best_value:.2f}, time={result.runtime:.3f}s, iterations={result.iterations}")
-    print(f"          {result.best_solution}")
-
-    # So sanh
-    if greedy_solution.total_value > 0:
-        improvement = (result.best_value - greedy_solution.total_value) / greedy_solution.total_value * 100
-        print(f"\nImprovement: {improvement:+.2f}% so voi Greedy")
-
-    # Trong so operator cuoi cung
-    print(f"\nDestroy weights: {result.destroy_weights}")
-    print(f"Repair weights:  {result.repair_weights}")
+    print()
+    print("--- LP solvers (Simplex, baseline Greedy) ---")
+    greedy = GreedyKnapsackSolver(instance)
+    t0 = time.perf_counter()
+    value, selected = greedy.solve_fractional()
+    runtime = time.perf_counter() - t0
+    print(_row("GreedyFractional", value, runtime, len(selected)))
+    for name, factory in [
+        ("PrimalSimplex", PrimalSimplexSolver),
+        ("DualSimplex", DualSimplexSolver),
+    ]:
+        solver = factory(instance)
+        t0 = time.perf_counter()
+        value, selected = solver.solve_fractional()
+        runtime = time.perf_counter() - t0
+        print(_row(name, value, runtime, len(selected)))
 
 
 if __name__ == "__main__":

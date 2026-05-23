@@ -21,9 +21,11 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from src.models import Item, KnapsackInstance
-from src.algorithms.backtracking import BacktrackingSolver
-from src.algorithms.branch_and_bound import BranchAndBoundSolver
-from src.algorithms.dp import DPKnapsackSolver
+from src.algorithms.basic import (
+    BacktrackingSolver,
+    BranchAndBoundSolver,
+    DPKnapsackSolver,
+)
 from src.algorithms.greedy import GreedyKnapsackSolver
 from src.algorithms.simplex import (
     PrimalSimplexSolver,
