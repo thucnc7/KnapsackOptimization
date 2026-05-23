@@ -42,9 +42,11 @@ class SimplexTableau:
 
         # Basis: initial basic variables are the slack vars (indices n .. n+m-1)
         self.basis: List[int] = [self.n + i for i in range(self.m)]
+        self.iterations: int = 0
 
     def pivot(self, row: int, col: int):
         """Vectorized pivot: divide pivot row, subtract multiples from others, update basis."""
+        self.iterations += 1
         pivot_val = self.tableau[row, col]
         self.tableau[row] = self.tableau[row] / pivot_val
         factors = self.tableau[:, col].copy()

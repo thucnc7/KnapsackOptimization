@@ -27,3 +27,6 @@ results/*
 # Webapp job logs
 results/csv/job_*.log
 
+# LaTeX folder (untracked local folder)
+latex/
+
